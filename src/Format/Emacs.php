@@ -4,6 +4,7 @@ namespace Tuchsoft\IssueReporter\Format;
 
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
+use Tuchsoft\IssueReporter\Format\Base\ParsableMessageFormatTrait;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
 use Tuchsoft\IssueReporter\Utils\Path;
@@ -16,6 +17,7 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
 {
 
 
+    use ParsableMessageFormatTrait;
 
     /**
      * Generates a multiline string in the Emacs-style format from a Report object.
@@ -33,22 +35,14 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
         foreach ($issuesByPath as $path => $issues) {
             /** @var Issue $issue */
             foreach ($issues as $issue) {
-                // Map internal severity to the required string
+
                 $severityString = match ($issue->getSeverity()) {
                     Report::SEVERITY_ERROR => 'error',
                     Report::SEVERITY_WARNING, Report::SEVERITY_TIP => 'warning',
                     default => 'warning',
                 };
 
-                $outputLines[] = sprintf(
-                    "%s:%d:%d: %s - %s (%s)",
-                    $path,
-                    $issue->getLine(),
-                    $issue->getColumn(),
-                    $severityString,
-                    $issue->getMessage(),
-                    $issue->getCode()
-                );
+                $outputLines[] = $this->getParsableMessage($issue, true, $severityString);
             }
         }
 
@@ -79,20 +73,31 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
 
             // Regex to match the Emacs-style format
             // Group 1: path, Group 2: line, Group 3: column, Group 4: severity, Group 5: message, Group 6: code
-            $pattern = '/^([^:]+):(\d+):(\d+): (error|warning) - (.+) \((.+)\)$/';
-            if (preg_match($pattern, $line, $matches)) {
-                $allPath[] = $matches[1];
-                $flatIssues[] = [
-                    'message' => $matches[5],
-                    'line' => (int)$matches[2],
-                    'column' => (int)$matches[3],
-                    'path' => $matches[1],
-                    'code' => $matches[6],
-                    'severity' => match ($matches[4]) {
+            $parsed = $this->parseMessage($line, true);
+            if (isset($parsed['message'])) {
+                $allPath[] = $parsed['path'];
+                $issueData = [
+                    'message' => $parsed['message'],
+                    'line' => (int)$parsed['line'],
+                    'column' => (int)$parsed['col'],
+                    'path' => $parsed['path'],
+                    'code' => $parsed['code'] ?? Issue::UNKNOW_CODE,
+                    'severity' => match ($parsed['severity']) {
                         'error' => Report::SEVERITY_ERROR,
                         default => Report::SEVERITY_WARNING,
                     },
                 ];
+
+                if (isset($parsed['help'])) {
+                    $issueData['help'] = $parsed['help'];
+                }
+
+                if (isset($parsed['ref'])) {
+                    $issueData['ref'] = $parsed['ref'];
+                }
+
+                $flatIssues[] = $issueData;
+
             }
         }
 
@@ -125,7 +130,6 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
     {
         return [
             self::FEATURE_ISSUE_COLUMN,
-            self::FEATURE_ISSUE_CODE,
             self::FEATURE_ISSUE_LINE];
     }
 
@@ -133,7 +137,8 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
     {
         return [
             self::FEATURE_ISSUE_REF,
-            self::FEATURE_ISSUE_HELP
+            self::FEATURE_ISSUE_HELP,
+            self::FEATURE_ISSUE_CODE,
         ];
     }
 }

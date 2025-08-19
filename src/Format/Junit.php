@@ -4,8 +4,10 @@ namespace Tuchsoft\IssueReporter\Format;
 
 use DOMDocument;
 use DOMException;
+use Symfony\Component\Console\Input\InputOption;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
+use Tuchsoft\IssueReporter\Format\Base\ParsableMessageFormatTrait;
 use Tuchsoft\IssueReporter\Format\Base\XmlFormatTrait;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
@@ -18,6 +20,7 @@ use Tuchsoft\IssueReporter\Utils\Path;
 class Junit extends AbstractFormat implements ParsableFormatInterface
 {
     use XmlFormatTrait;
+    use ParsableMessageFormatTrait;
 
     /**
      * Generates a JUnit XML string from a Report object.
@@ -61,6 +64,14 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
                     'extra' => json_encode($issue->getExtra())
                 ];
 
+                if ($this->options['show-help']) {
+                    $props['help'] = $issue->getHelp();
+                }
+
+                if ($this->options['show-ref']) {
+                    $props['ref'] = $issue->getRef();
+                }
+
 
                 $testCase = $dom->createElement('testcase');
                 $testCase->setAttribute('name', $this->options['show-code'] ? $issue->getCode() : $path);
@@ -73,17 +84,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
                     $failure->setAttribute('type', $issue->getCode());
                 }
                 $failure->setAttribute('message', $issue->getMessage());
-                $fullMessage = "Error in file '{$path}' at line {$issue->getLine()}, column {$issue->getColumn()}: {$issue->getMessage()}";
-
-                if ($this->options['show-help'] && !empty($issue->getHelp())) {
-                    $props['help'] = $issue->getHelp();
-                    $fullMessage .= " ({$issue->getHelp()})";
-                }
-
-                if ($this->options['show-ref'] && !empty($issue->getRef())) {
-                    $props['ref'] = $issue->getRef();
-                    $fullMessage .= " [{$issue->getRef()}]";
-                }
+                $fullMessage = $this->getParsableMessage($issue, true);
 
                 $failure->appendChild($dom->createTextNode($fullMessage));
 
@@ -155,6 +156,29 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
                     $extra = [];
                     $ref = '';
 
+                    if ($this->options['parse-message']) {
+                        $parsed = $this->parseMessage($message, true);
+                        if ($parsed['message']) {
+                            $message = $parsed['message'];
+                        }
+
+                        if ($parsed['line']) {
+                            $line = $parsed['line'];
+                        }
+
+                        if ($parsed['col']) {
+                            $column = $parsed['col'];
+                        }
+
+                        if ($parsed['help']) {
+                            $column = $parsed['help'];
+                        }
+
+                        if ($parsed['ref']) {
+                            $column = $parsed['ref'];
+                        }
+                    }
+
                     // Extract properties from the new <properties> tag
                     if (isset($testcase->properties)) {
                         foreach ($testcase->properties->property as $property) {
@@ -224,5 +248,15 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
     public static function supportsExtra(): array
     {
         return [];
+    }
+
+
+    public static function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL): array
+    {
+        return [
+            ...parent::getOptionsDefinition($returnType),
+            ...self::getXmlOptions($returnType),
+            ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', true, $returnType)
+        ];
     }
 }

@@ -50,13 +50,14 @@ class EmacsTest extends AbstractTestFormat
             };
 
             $expectedLine = sprintf(
-                "%s:%d:%d: %s - %s (%s)",
+                "%s:%d:%d: %s - %s (#%s) (%s)",
                 $issue->getPath(),
                 $issue->getLine(),
                 $issue->getColumn(),
                 $expectedSeverity,
                 $issue->getMessage(),
-                $issue->getCode()
+                $issue->getCode(),
+                $issue->getHelp()
             );
 
             $this->assertEquals($expectedLine, $lines[$index]);
@@ -69,9 +70,9 @@ class EmacsTest extends AbstractTestFormat
     public function testParseCreatesCorrectReportObject(): void
     {
         $input = <<<TEXT
-src/File1.php:10:5: error - This is an error. (Some.Error.Rule)
-src/File1.php:20:15: warning - This is a warning. (Some.Warning.Rule)
-src/File2.php:30:1: warning - This is a tip. (Some.Tip.Rule)
+src/File1.php:10:5: error - This is an error. (#Some.Error.Rule)
+src/File1.php:20:15: warning - This is a warning. (#Some.Warning.Rule)
+src/File2.php:30:1: warning - This is a tip. (#Some.Tip.Rule)
 TEXT;
 
         $report = $this->formatter->parse($input, 'Parsed Emacs Report');
@@ -118,10 +119,10 @@ TEXT;
     public function testParseHandlesEmptyAndInvalidLines(): void
     {
         $input = <<<TEXT
-src/File1.php:10:5: error - This is a valid line. (Valid.Rule)
+src/File1.php:10:5: error - This is a valid line. (#Valid.Rule)
 
 This is an invalid line that should be ignored.
-src/File2.php:20:15: warning - Another valid line. (Another.Rule)
+src/File2.php:20:15: warning - Another valid line. (#Another.Rule)
 
 TEXT;
 

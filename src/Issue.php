@@ -7,6 +7,15 @@ use Exception;
 class Issue implements \JsonSerializable
 {
 
+    public const SEVERITY_ERROR = 5;
+    public const SEVERITY_WARNING = 3;
+    public const SEVERITY_TIP = 0;
+    public const SEVERITY_ERROR_STRING = 'ERROR';
+    public const SEVERITY_WARNING_STRING = 'WARNING';
+    public const SEVERITY_TIP_STRING = 'TIP';
+
+
+
     public const UNKNOW_CODE = 'unknown';
     /**
      * @var string The issue code.
@@ -160,6 +169,16 @@ class Issue implements \JsonSerializable
     public function getSeverity(): int
     {
         return $this->severity;
+    }
+
+
+    public function getSeverityString(): string
+    {
+        return match ($this->severity) {
+            static::SEVERITY_ERROR => static::SEVERITY_ERROR_STRING,
+            static::SEVERITY_WARNING => static::SEVERITY_WARNING_STRING,
+            static::SEVERITY_TIP => static::SEVERITY_TIP_STRING
+        };
     }
 
     /**

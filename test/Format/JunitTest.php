@@ -13,6 +13,7 @@ use Tuchsoft\IssueReporter\Format\Junit;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
 use Tuchsoft\IssueReporter\Test\Base\AbstractTestFormat;
+use Tuchsoft\IssueReporter\Test\Base\ParsableMessageTrait;
 use Tuchsoft\IssueReporter\Test\Base\ReportProvider;
 
 #[CoversClass(\Tuchsoft\IssueReporter\Format\Junit::class)]
@@ -20,6 +21,7 @@ use Tuchsoft\IssueReporter\Test\Base\ReportProvider;
 class JunitTest extends AbstractTestFormat
 {
     use ReportProvider;
+    use ParsableMessageTrait;
 
     /** @var Junit $formatter */
     protected FormatInterface $formatter;
@@ -90,8 +92,8 @@ class JunitTest extends AbstractTestFormat
                 $this->assertEquals($originalIssue->getCode(), (string)$failureElement['type']);
                 $this->assertEquals($originalIssue->getMessage(), (string)$failureElement['message']);
 
-                $expectedFullMessage = "Error in file '{$path}' at line {$originalIssue->getLine()}, column {$originalIssue->getColumn()}: {$originalIssue->getMessage()} ({$originalIssue->getHelp()})";
-                $this->assertEquals($expectedFullMessage, trim((string)$failureElement));
+                $this->assertFullEmacsMessage($originalIssue, (string)$failureElement);
+
 
                 // Check <properties>
                 $this->assertObjectHasProperty('properties', $foundTestcase);
@@ -179,14 +181,8 @@ class JunitTest extends AbstractTestFormat
         }
 
         // Build the expected full message dynamically
-        $expectedFullMessage = "Error in file '{$path}' at line {$testIssue->getLine()}, column {$testIssue->getColumn()}: {$testIssue->getMessage()}";
-        if ($withHelp && $testIssue->getHelp()) {
-            $expectedFullMessage .= " ({$testIssue->getHelp()})";
-        }
-        if ($withRef && $testIssue->getRef()) {
-            $expectedFullMessage .= " [{$testIssue->getRef()}]";
-        }
-        $this->assertEquals($expectedFullMessage, trim((string)$failure));
+        $this->assertFullEmacsMessage($testIssue, (string)$failure, $withHelp, $withRef);
+
 
         // Assert properties based on options
         $properties = [];
@@ -247,10 +243,13 @@ class JunitTest extends AbstractTestFormat
 <testsuites name="My Test Report" tests="2" failures="2" errors="1">
   <testsuite name="src/File1.php" tests="2" failures="2">
     <testcase name="Some.Error.Rule: This is an error." classname="src/File1.php">
-      <error type="Some.Error.Rule">Error in file 'src/File1.php' at line 10, column 5: This is an error.</error>
+      <error type="Some.Error.Rule">src/File1.php:10:5: error - This is an error.</error>
     </testcase>
-    <testcase name="Some.Warning.Rule: This is a warning." classname="src/File1.php">
-      <failure type="Some.Warning.Rule">Warning/Tip in file 'src/File1.php' at line 20, column 15: This is a warning.</failure>
+    <testcase name="Some.Warning.Rule: This is a warning. [ref]" classname="src/File1.php">
+      <failure type="Some.Warning.Rule">src/File1.php:20:15: warning - This is a warning.</failure>
+    </testcase>
+      <testcase name="This is a warning. (#Some.Warning.Rule) (help) [ref]" classname="src/File1.php">
+      <failure type="Some.Warning.Rule">src/File1.php:20:15: warning - This is a warning.</failure>
     </testcase>
   </testsuite>
 </testsuites>
@@ -272,7 +271,9 @@ XML;
         // Check the error issue
         $errorIssue = $issues[0];
         preg_match("/at line (\d+), column (\d+): (.*)/", (string)$expectedErrorCase->error, $matches);
-        $this->assertEquals("Error in file 'src/File1.php' at line 10, column 5: This is an error.", $errorIssue->getMessage());
+        $this->assertEquals("This is an error", $errorIssue->getMessage());
+        $this->assertEmpty($errorIssue->getHelp());
+        $this->assertEmpty($errorIssue->getRef());
         $this->assertEquals((string)$expectedErrorCase['classname'], $errorIssue->getPath());
         $this->assertEquals(10, $errorIssue->getLine());
         $this->assertEquals(5, $errorIssue->getColumn());
@@ -281,7 +282,9 @@ XML;
 
         // Check the warning issue
         $warningIssue = $issues[1];
-        $this->assertEquals("Warning/Tip in file 'src/File1.php' at line 20, column 15: This is a warning.", $warningIssue->getMessage());
+        $this->assertEquals("This is an warning.", $warningIssue->getMessage());
+        $this->assertEmpty($warningIssue->getHelp());
+        $this->assertEmpty($warningIssue->getRef());
         $this->assertEquals((string)$expectedWarningCase['classname'], $warningIssue->getPath());
         $this->assertEquals(20, $warningIssue->getLine());
         $this->assertEquals(15, $warningIssue->getColumn());
@@ -374,16 +377,8 @@ XML;
             // <failure> as WARNING. Thus, an original ERROR or TIP becomes a WARNING after the round trip.
             $this->assertEquals(Report::SEVERITY_WARNING, $parsedIssue->getSeverity());
 
-            // The message is reconstructed during parsing from the full text in the <failure> element.
-            // The `parse` method does not extract help/ref back into their respective properties.
-            $expectedMessage = "Error in file '{$originalIssue->getPath()}' at line {$originalIssue->getLine()}, column {$originalIssue->getColumn()}: {$originalIssue->getMessage()}";
-            if ($originalIssue->getHelp()) {
-                $expectedMessage .= " ({$originalIssue->getHelp()})";
-            }
-            if ($originalIssue->getRef()) {
-                $expectedMessage .= " [{$originalIssue->getRef()}]";
-            }
-            $this->assertEquals($expectedMessage, $parsedIssue->getMessage());
+            $this->assertEquals($originalIssue->getMessage(), $parsedIssue->getMessage());
+
 
             // KNOWN INCONSISTENCY: `parse` does not read the <properties> tag generated by `generate`.
             // Therefore, `help`, `ref`, and `extra` data are lost as distinct properties on the Issue object.

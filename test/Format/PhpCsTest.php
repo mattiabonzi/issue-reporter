@@ -234,7 +234,7 @@ JSON;
         $expectedErrorData = $inputData['files']['src/File1.php']['messages'][0];
         $expectedWarningData = $inputData['files']['src/File1.php']['messages'][1];
 
-        $report = $this->formatter->parse($jsonInput, 'My Parsed Report');
+        $report = $this->formatter->parse($jsonInput);
         $this->assertInstanceOf(Report::class, $report);
 
         $issues = $report->getIssues(false, false);
@@ -324,7 +324,7 @@ JSON;
 
         // 3. Generate the JSON string from it and parse it back
         $jsonOutput = $this->formatter->generate($originalReport);
-        $parsedReport = $this->formatter->parse($jsonOutput, 'Parsed Report');
+        $parsedReport = $this->formatter->parse($jsonOutput);
 
         // 4. Compare the meaningful data of the reports
         self::assertEqualReport(

@@ -6,6 +6,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\JsonFormatTrait;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
+use Tuchsoft\IssueReporter\Format\Base\ParsableMessageFormatTrait;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
 use Tuchsoft\IssueReporter\Utils\Path;
@@ -13,6 +14,7 @@ use Tuchsoft\IssueReporter\Utils\Path;
 class PhpCs extends AbstractFormat implements ParsableFormatInterface
 {
     use JsonFormatTrait;
+    use ParsableMessageFormatTrait;
 
     public function generate(Report $report): string
     {
@@ -56,22 +58,10 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                 }
 
                 // 3. Correctly append help and ref info from the $issue object.
-                $messageSuffix = '';
-                if ($this->options['show-help'] && $issue->getHelp()) {
-                    $messageSuffix .= " ({$issue->getHelp()})";
-                }
-
-                if ($this->options['show-ref'] && $issue->getRef()) {
-                    // 4. Fixed bug: Was using getHelp() instead of getRef().
-                    $messageSuffix .= " [{$issue->getRef()}]";
-                }
-
-                if ($messageSuffix !== '') {
-                    $messageData['message'] .= $messageSuffix;
-                }
+                $messageData['message'] = $this->getParsableMessage($issue);
 
                 $messages[] = $messageData;
-                // --- End of Fixes ---
+
             }
 
             $output['files'][$path] = [
@@ -122,13 +112,12 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                     }
                 ];
                 if ($this->options['parse-message']) {
-                    $parsed = [];
-                    preg_match( "/(?<message>.+?(?=[\(\[]))(?:\s?\((?<help>.+)\))?(?:\s?\[(?<ref>.+)\])?/", $issue['message'], $parsed);
-                    $issue['message'] = trim($parsed['message']);
+                    $parsed = $this->parseMessage($issue['message']);
+
+                    $issue['message'] = $parsed['message'];
                     $issue['help'] = $parsed['help'] ?? null;
                     $issue['ref'] = $parsed['ref'] ?? null;
                 }
-
                 $flatIssues[] = $issue;
             }
         }
@@ -157,17 +146,24 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
         return [
             ...parent::getOptionsDefinition($returnType),
             ...self::getJsonOptions($returnType),
-            ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', false, $returnType)
+            ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', true, $returnType)
             ];
     }
 
     public static function supports(): array
     {
-        return [];
+        return [
+            self::FEATURE_PARSABLE_MESSAGE,
+            self::FEATURE_ISSUE_COLUMN,
+            self::FEATURE_ISSUE_LINE,
+            self::FEATURE_PRESERVE_SEVERITY
+        ];
     }
 
     public static function supportsExtra(): array
     {
-        return [];
+        return [
+            self::FEATURE_ISSUE_CODE,
+        ];
     }
 }
