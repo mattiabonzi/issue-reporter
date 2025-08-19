@@ -4,6 +4,7 @@ namespace Tuchsoft\IssueReporter\Format;
 
 use DOMDocument;
 use DOMException;
+use InvalidArgumentException;
 use Symfony\Component\Console\Input\InputOption;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
@@ -21,6 +22,29 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
 {
     use XmlFormatTrait;
     use ParsableMessageFormatTrait;
+
+    /**
+     * @return string The description of the format.
+     */
+    public static function getDesc(): string
+    {
+        return "JUnit XML representation for static analysis reports";
+    }
+
+    public static function supports(): array
+    {
+        return [];
+    }
+
+    public static function supportsExtra(): array
+    {
+        return [];
+    }
+
+    public static function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL): array
+    {
+        return [...parent::getOptionsDefinition($returnType), ...self::getXmlOptions($returnType), ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', true, $returnType)];
+    }
 
     /**
      * Generates a JUnit XML string from a Report object.
@@ -44,7 +68,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
         $testSuites->setAttribute('errors', (string)$totalErrorCount);
         $testSuites->setAttribute('name', $report->getName());
         $testSuites->setAttribute('time', $report->getTotalTime());
-        $testSuites->setAttribute('timestamp', (string) round($report->getTimeEnd()));
+        $testSuites->setAttribute('timestamp', (string)round($report->getTimeEnd()));
         $dom->appendChild($testSuites);
 
         foreach ($report->getIssues() as $path => $issues) {
@@ -57,12 +81,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
 
             /** @var Issue $issue */
             foreach ($issues as $issue) {
-                $props = [
-                    'severity' => $this->getSeverityIcon($issue->getSeverity()),
-                    'line' => $issue->getLine(),
-                    'column' => $issue->getColumn(),
-                    'extra' => json_encode($issue->getExtra())
-                ];
+                $props = ['severity' => $issue->getSeverity(), 'line' => $issue->getLine(), 'column' => $issue->getColumn(), 'extra' => json_encode($issue->getExtra())];
 
                 if ($this->options['show-help']) {
                     $props['help'] = $issue->getHelp();
@@ -88,7 +107,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
 
                 $failure->appendChild($dom->createTextNode($fullMessage));
 
-                $properties =  $dom->createElement('properties');
+                $properties = $dom->createElement('properties');
                 foreach ($props as $key => $value) {
                     $property = $dom->createElement('property');
                     $property->setAttribute('name', $key);
@@ -112,7 +131,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
      * @param string $input The XML string to parse.
      * @param string $name The name for the new Report object.
      * @return Report The parsed Report object.
-     * @throws \InvalidArgumentException If the XML is invalid or the structure is incorrect.
+     * @throws InvalidArgumentException If the XML is invalid or the structure is incorrect.
      */
     public function parse(string $input, ?string $name = null): Report
     {
@@ -130,7 +149,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
                 $errorMessage .= "{$error->message} ";
             }
             libxml_clear_errors();
-            throw new \InvalidArgumentException($errorMessage);
+            throw new InvalidArgumentException($errorMessage);
         }
 
         $flatIssues = [];
@@ -142,121 +161,72 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
             $allPaths[] = $path;
 
             foreach ($testsuite->testcase as $testcase) {
-                if (!isset($testcase->failure) &&  !isset($testcase->error)) continue;
-                // Check for failure/error elements
-                $issueElement = $testcase->failure ?? $testcase->error;
-
-                if ($issueElement) {
-
-                    $severity = Report::SEVERITY_ERROR;
-                    $message = trim((string) ($issueElement['message'] ?? $issueElement[0]));
-                    $code = (string)$issueElement['type'];
-                    $line = (int)$testcase['line'];
-                    $column = 0;
-                    $extra = [];
-                    $ref = '';
-
-                    if ($this->options['parse-message']) {
-                        $parsed = $this->parseMessage($message, true);
-                        if ($parsed['message']) {
-                            $message = $parsed['message'];
-                        }
-
-                        if ($parsed['line']) {
-                            $line = $parsed['line'];
-                        }
-
-                        if ($parsed['col']) {
-                            $column = $parsed['col'];
-                        }
-
-                        if ($parsed['help']) {
-                            $column = $parsed['help'];
-                        }
-
-                        if ($parsed['ref']) {
-                            $column = $parsed['ref'];
-                        }
-                    }
-
-                    // Extract properties from the new <properties> tag
-                    if (isset($testcase->properties)) {
-                        foreach ($testcase->properties->property as $property) {
-                            $propName = (string)$property['name'];
-                            $propValue = (string)$property['value'];
-                            switch ($propName) {
-                                case 'severity':
-                                    if ($propValue === 'Error') {
-                                        $severity = Report::SEVERITY_ERROR;
-                                    }
-                                    break;
-                                case 'line':
-                                    $line = (int)$propValue;
-                                    break;
-                                case 'column':
-                                    $column = (int)$propValue;
-                                    break;
-                                case 'extra':
-                                    $extra = json_decode($propValue, true);
-                                    break;
-                                case 'ref':
-                                    $ref = $propValue;
-                                    break;
-                            }
-                        }
-                    }
-
-                    $flatIssues[] = [
-                        'message' => $message,
-                        'line' => $line,
-                        'column' => $column,
-                        'path' => $path,
-                        'code' => $code,
-                        'severity' => $severity,
-                        'ref' => $ref,
-                        'extra' => $extra,
-                    ];
+                // If no failure or error, move to the next item
+                if (!isset($testcase->failure) && !isset($testcase->error)) {
+                    continue;
                 }
+
+                $issueElement = $testcase->failure ?? $testcase->error;
+                $message = (string)($issueElement['message'] ?? $issueElement[0]);
+                $help = (string)($issueElement['message'] ? ($issueElement[0] ?? null) : $issueElement[1] ?? null);
+
+
+                $severity = Report::SEVERITY_ERROR;
+                $code = (string)$issueElement['type'];
+                $line = (int)($testcase['line'] ?? 0);
+                $column = 0;
+                $extra = [];
+                $ref = '';
+
+
+                if ($this->options['parse-message']) {
+                    $parsed = $this->parseMessage($message, true);
+                    $message = $parsed['message'] ?? $message;
+                    $line = (!$line && $parsed['line']) ?? $line;
+                    $column = $parsed['col'] ?? $column;
+                    $help = $parsed['help'] ?? $help;
+                    $ref = $parsed['ref'] ?? $ref;
+                    $code = (!$code && $parsed['cod']) ?? $code;
+                    $severity = $parsed['severity'] ?? $severity;
+                }
+
+
+                if (isset($testcase->properties)) {
+                    foreach ($testcase->properties->property as $property) {
+                        $propName = (string)$property['name'];
+                        $propValue = (string)$property['value'];
+
+                        switch ($propName) {
+                            case 'severity':
+                                $severity = (int)$propValue;
+                                break;
+                            case 'line':
+                                $line = (int)$propValue;
+                                break;
+                            case 'column':
+                                $column = (int)$propValue;
+                                break;
+                            case 'extra':
+                                $extra = json_decode($propValue, true) ?? [];
+                                break;
+                            case 'ref':
+                                $ref = $propValue;
+                                break;
+                            case 'help':
+                                $help = $propValue;
+                                break;
+                        }
+                    }
+                }
+                $flatIssues[] = ['message' => $message, 'line' => $line, 'column' => $column, 'path' => $path, 'code' => $code, 'severity' => $severity, 'ref' => $ref, 'help' => $help, 'extra' => $extra,];
             }
         }
 
-        $reportData = [
-            'name' => $reportName,
-            'issues' => $flatIssues,
-            'subReports' => [],
-            'timeStart' => (float) ($xml['timestamp'] ?? 0),
-            'timeEnd' => (float) ($xml['timestamp'] ?? 0),
-            'basePath' => Path::findCommonBasePath($allPaths)
-        ];
+        $timeEnd = (int)$xml['timestamp'] ?? 0;
+        $timeStart = $timeEnd ? $timeEnd - ((int)$xml['time'] ?? 0) : 0;
+
+        $reportData = ['name' => $reportName, 'issues' => $flatIssues, 'subReports' => [], 'timeStart' => $timeStart, 'timeEnd' => $timeEnd, 'basePath' => Path::findCommonBasePath($allPaths)];
 
         return Report::fromJson($reportData);
-    }
-
-    /**
-     * @return string The description of the format.
-     */
-    public static function getDesc(): string
-    {
-        return "JUnit XML representation for static analysis reports";
-    }
-
-    public static function supports(): array
-    {
-        return [];
-    }
-
-    public static function supportsExtra(): array
-    {
-        return [];
-    }
-
-
-    public static function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL): array
-    {
-        return [
-            ...parent::getOptionsDefinition($returnType),
-            ...self::getXmlOptions($returnType),
-            ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', true, $returnType)
-        ];
     }
 }
