@@ -1,0 +1,37 @@
+{
+    "name": "tuchsoft/issue-reporter",
+    "description": "A reporting library for static code analysis issues. It reads, aggregates, and formats common issue formats into various report types.",
+    "type": "library",
+    "license": "GPL-3.0-or-later",
+    "autoload": {
+        "psr-4": {
+            "Tuchsoft\\IssueReporter\\": "src/",
+            "Tuchsoft\\IssueReporter\\Format\\": "src/Format",
+            "Tuchsoft\\IssueReporter\\Transformer": "src/Transformer"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tuchsoft\\IssueReporter\\Test\\": "test/"
+        }
+    },
+
+    "authors": [
+        {
+            "name": "Mattia Bonzi",
+            "email": "mattia@mattiabonzi.it"
+        }
+    ],
+    "require": {
+        "ext-dom": "*",
+        "symfony/console": "^5 || ^6 || ^7",
+        "davidbadura/markdown-builder": "^1.1",
+        "erusev/parsedown": "^1",
+        "riimu/kit-pathjoin": "^1.2",
+        "mustache/mustache": "^2 | ^3"
+
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.3"
+    }
+}
