@@ -2,7 +2,8 @@
 
 namespace Tuchsoft\IssueReporter\Test\Format;
 
-use Tuchsoft\IssueReporter\Test\Base\AbstractTestFormat;
+
+
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -10,18 +11,22 @@ use Tuchsoft\IssueReporter\Format\Base\FormatInterface;
 use Tuchsoft\IssueReporter\Format\PhpCs;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
-use Tuchsoft\IssueReporter\Test\Base\JsonOptionsProvider;
-use Tuchsoft\IssueReporter\Test\Base\ReportProvider;
+use Tuchsoft\IssueReporter\Test\Base\AbstractJsonFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\AbstractParsableFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\Provider\JsonOptionsProvider;
+use Tuchsoft\IssueReporter\Test\Base\Provider\ReportProvider;
 
 #[CoversClass(\Tuchsoft\IssueReporter\Format\PhpCs::class)]
 #[Group('PhpCs')]
-class PhpCsTest extends AbstractTestFormat
+class PhpCsTest extends  AbstractJsonFormatTest
 {
+
     use ReportProvider;
     use JsonOptionsProvider;
 
     /** @var PhpCs $formatter */
     protected FormatInterface $formatter;
+    protected static string $formatterClass = PhpCs::class;
 
 
     protected function setUp(): void
@@ -37,7 +42,7 @@ class PhpCsTest extends AbstractTestFormat
      */
     public function testGenerateProducesCorrectJsonFormat(): void
     {
-        $report = $this->createTestReport();
+        $report = $this->getFixedTestReport();
         $jsonOutput = $this->formatter->generate($report);
 
         $data = json_decode($jsonOutput, true);
@@ -63,7 +68,7 @@ class PhpCsTest extends AbstractTestFormat
 
         // Find the original error issue to compare against
         /** @var Issue $originalError */
-        $originalError = current(array_filter($issuesInFile1, fn(Issue $i) => $i->getSeverity() === Report::SEVERITY_ERROR));
+        $originalError = current(array_filter($issuesInFile1, fn(Issue $i) => $i->getSeverity() === Issue::SEVERITY_ERROR));
         // Find the corresponding message in the JSON output
         $jsonErrorMessage = current(array_filter($file1Data['messages'], fn(array $m) => $m['type'] === 'ERROR'));
 
@@ -85,11 +90,11 @@ class PhpCsTest extends AbstractTestFormat
      * @param bool $withRef Whether the ref link should be in the message.
      */
     #[DataProvider('optionsProvider')]
-    public function testGenerateWithOptions(array $options, string $expectedSourceAssertion, bool $withHelp, bool $withRef): void
+    public function testGenerateWithOptions(array $options, bool $withHelp, bool $withRef): void
     {
         // Create a new formatter instance with the specific options for this test
         $this->formatter->setOptions($options);
-        $report = $this->createTestReport();
+        $report = $this->getFixedTestReport();
 
         $issues = $report->getIssues();
         /** @var Issue $testIssue */
@@ -101,13 +106,8 @@ class PhpCsTest extends AbstractTestFormat
         // Find the corresponding message in the JSON output
         $jsonMessage = $data['files'][$testIssue->getPath()]['messages'][0];
 
-        // Assert 'source' key presence based on 'show-code' option
-        if ($expectedSourceAssertion === 'present') {
-            $this->assertArrayHasKey('source', $jsonMessage);
-            $this->assertEquals($testIssue->getCode(), $jsonMessage['source']);
-        } else {
-            $this->assertArrayNotHasKey('source', $jsonMessage);
-        }
+        $this->assertArrayHasKey('source', $jsonMessage);
+        $this->assertEquals($testIssue->getCode(), $jsonMessage['source']);
 
         // Build the expected message dynamically from the source issue
         $expectedMessage = $testIssue->getMessage();
@@ -131,82 +131,29 @@ class PhpCsTest extends AbstractTestFormat
         return [
             // 'no options' means explicitly setting these boolean options to false.
             'no options' => [
-                'options' => ['show-code' => false, 'show-help' => false, 'show-ref' => false],
-                'expectedSourceAssertion' => 'absent',
-                'withHelp' => false,
-                'withRef' => false,
-            ],
-            'show-code only' => [
-                'options' => ['show-code' => true, 'show-help' => false, 'show-ref' => false],
-                'expectedSourceAssertion' => 'present',
+                'options' => ['show-help' => false, 'show-ref' => false],
                 'withHelp' => false,
                 'withRef' => false,
             ],
             'show-help only' => [
-                'options' => ['show-code' => false, 'show-help' => true, 'show-ref' => false],
-                'expectedSourceAssertion' => 'absent',
+                'options' => ['show-help' => true, 'show-ref' => false],
                 'withHelp' => true,
                 'withRef' => false,
             ],
             'show-ref only' => [
-                'options' => ['show-code' => false, 'show-help' => false, 'show-ref' => true],
-                'expectedSourceAssertion' => 'absent',
+                'options' => ['show-help' => false, 'show-ref' => true],
                 'withHelp' => false,
                 'withRef' => true,
             ],
-            'show-help and show-ref' => [
-                'options' => ['show-code' => false, 'show-help' => true, 'show-ref' => true],
-                'expectedSourceAssertion' => 'absent',
-                'withHelp' => true,
-                'withRef' => true,
-            ],
             'all options enabled' => [
-                'options' => ['show-code' => true, 'show-help' => true, 'show-ref' => true],
-                'expectedSourceAssertion' => 'present',
+                'options' => ['show-help' => true, 'show-ref' => true],
                 'withHelp' => true,
                 'withRef' => true,
             ],
         ];
     }
 
-    /**
-     * Tests the JSON encoding options from JsonFormatTrait.
-     *
-     * @param array<string, bool> $options The JSON formatting options.
-     * @param string $expectedSlash Expected format for file path with slashes.
-     * @param string $expectedUnicode Expected format for a message with unicode characters.
-     * @param bool $isPretty Whether the output should be pretty-printed.
-     */
-    #[DataProvider('jsonOptionsProvider')]
-    public function testGenerateWithJsonFormattingOptions(array $options, string $expectedSlash, string $expectedUnicode, bool $isPretty): void
-    {
-        // The PhpCs formatter uses JsonFormatTrait, so we can test JSON options here.
-        // We merge with other options set to false to isolate the JSON formatting behavior.
-        $this->formatter->setOptions(array_merge([
-            'show-code' => false,
-            'show-help' => false,
-            'show-ref' => false,
-        ], $options));
 
-        $report = $this->createTestReport();
-
-        $jsonOutput = $this->formatter->generate($report);
-
-        // Test slash escaping by checking the file path key
-        $this->assertStringContainsString($expectedSlash, $jsonOutput);
-
-        // Test unicode escaping by checking the message content
-        $this->assertStringContainsString($expectedUnicode, $jsonOutput);
-
-        // Test pretty printing
-        if ($isPretty) {
-            // Pretty-printed JSON has newlines.
-            $this->assertStringContainsString("\n", $jsonOutput);
-        } else {
-            // Non-pretty JSON should not have newlines.
-            $this->assertStringNotContainsString("\n", $jsonOutput);
-        }
-    }
 
 
 
@@ -249,7 +196,7 @@ JSON;
         $this->assertEquals($expectedErrorData['line'], $errorIssue->getLine());
         $this->assertEquals($expectedErrorData['column'], $errorIssue->getColumn());
         $this->assertEquals($expectedErrorData['source'], $errorIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_ERROR, $errorIssue->getSeverity());
+        $this->assertEquals(Issue::SEVERITY_ERROR, $errorIssue->getSeverity());
 
         $warningIssue = $issues[1];
         $this->assertEquals($expectedWarningData['message'], $warningIssue->getMessage());
@@ -257,7 +204,7 @@ JSON;
         $this->assertEquals($expectedWarningData['line'], $warningIssue->getLine());
         $this->assertEquals($expectedWarningData['column'], $warningIssue->getColumn());
         $this->assertEquals($expectedWarningData['source'], $warningIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_WARNING, $warningIssue->getSeverity());
+        $this->assertEquals(Issue::SEVERITY_WARNING, $warningIssue->getSeverity());
     }
 
     /**
@@ -285,15 +232,6 @@ JSON;
         $this->assertEquals(Issue::UNKNOW_CODE, $issues[0]->getCode(), 'Code should be '.Issue::UNKNOW_CODE.' when source is missing.');
     }
 
-    /**
-     * Verifies that the parse method throws an exception for malformed JSON.
-     */
-    public function testParseThrowsExceptionForInvalidJson(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid JSON input: Syntax error');
-        $this->formatter->parse('this is not json');
-    }
 
     /**
      * Verifies that the parse method throws an exception for JSON with a missing 'files' key.
@@ -305,63 +243,5 @@ JSON;
         $this->formatter->parse('{"totals": {"errors": 1}}');
     }
 
-    /**
-     * Tests the full cycle of generating a report with full metadata and then parsing it back.
-     * This ensures that all data (code, help, ref) can be preserved across generation and parsing.
-     */
-    public function testGenerateAndParseRoundTripWithFullMetadata(): void
-    {
-        // 1. Create an initial report
-        $originalReport = $this->createTestReport();
 
-        // 2. Create a formatter with all metadata options enabled
-        $this->formatter->setOptions([
-            'show-code' => true,
-            'show-help' => true,
-            'show-ref' => true,
-            'parse-message' => true,
-        ]);
-
-        // 3. Generate the JSON string from it and parse it back
-        $jsonOutput = $this->formatter->generate($originalReport);
-        $parsedReport = $this->formatter->parse($jsonOutput);
-
-        // 4. Compare the meaningful data of the reports
-        self::assertEqualReport(
-            $originalReport,
-            $parsedReport,
-            name: $this->formatter->getDefaultReportName(),
-            warnings: $originalReport->getTotalWarnings()+$originalReport->getTotalTips(),
-            tips: 0
-        );
-
-        $originalIssues = $originalReport->getIssues(false, true);
-        $parsedIssues = $parsedReport->getIssues(false, false);
-
-        $this->assertCount(count($originalIssues), $parsedIssues);
-
-        // Sort issues to ensure consistent order for comparison
-        $sortFunc = fn(Issue $a, Issue $b) => strcmp($a->getPath() . $a->getLine(), $b->getPath() . $b->getLine());
-        usort($originalIssues, $sortFunc);
-        usort($parsedIssues, $sortFunc);
-
-        foreach ($originalIssues as $i => $originalIssue) {
-            $parsedIssue = $parsedIssues[$i];
-
-            $this->assertEquals($originalIssue->getMessage(), $parsedIssue->getMessage());
-            $this->assertEquals($originalIssue->getHelp(), $parsedIssue->getHelp());
-            $this->assertEquals($originalIssue->getRef(), $parsedIssue->getRef());
-            $this->assertEquals($originalIssue->getPath(), $parsedIssue->getPath());
-            $this->assertEquals($originalIssue->getLine(), $parsedIssue->getLine());
-            $this->assertEquals($originalIssue->getColumn(), $parsedIssue->getColumn());
-            $this->assertEquals($originalIssue->getCode(), $parsedIssue->getCode());
-
-            // The PhpCs format maps TIP to WARNING. When parsing, it comes back as SEVERITY_WARNING.
-            $expectedSeverity = ($originalIssue->getSeverity() === Report::SEVERITY_TIP)
-                ? Report::SEVERITY_WARNING
-                : $originalIssue->getSeverity();
-
-            $this->assertEquals($expectedSeverity, $parsedIssue->getSeverity());
-        }
-    }
 }

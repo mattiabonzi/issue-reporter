@@ -20,18 +20,18 @@ class SonarQube extends AbstractFormat implements ParsableFormatInterface
      * Maps internal severity constants to SonarQube's issue type.
      */
     const SEVERITY_TO_TYPE_MAP = [
-        Report::SEVERITY_ERROR => 'BUG',
-        Report::SEVERITY_WARNING => 'CODE_SMELL',
-        Report::SEVERITY_TIP => 'CODE_SMELL',
+        Issue::SEVERITY_ERROR => 'BUG',
+        Issue::SEVERITY_WARNING => 'CODE_SMELL',
+        Issue::SEVERITY_TIP => 'CODE_SMELL',
     ];
 
     /**
      * Maps internal severity constants to SonarQube's severity level.
      */
     const SEVERITY_TO_SONARQUBE_SEVERITY_MAP = [
-        Report::SEVERITY_ERROR => 'BLOCKER',
-        Report::SEVERITY_WARNING => 'MAJOR',
-        Report::SEVERITY_TIP => 'MINOR',
+        Issue::SEVERITY_ERROR => 'BLOCKER',
+        Issue::SEVERITY_WARNING => 'MAJOR',
+        Issue::SEVERITY_TIP => 'MINOR',
     ];
 
     /**
@@ -112,7 +112,7 @@ class SonarQube extends AbstractFormat implements ParsableFormatInterface
             }
 
             $severityString = $sqIssue['severity'] ?? 'MINOR';
-            $severity = $sonarqubeSeverityToInternal[$severityString] ?? Report::SEVERITY_WARNING;
+            $severity = $sonarqubeSeverityToInternal[$severityString] ?? Issue::SEVERITY_WARNING;
 
             $flatIssues[] = [
                 'message' => $location['message'] ?? 'No message provided',

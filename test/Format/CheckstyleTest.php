@@ -10,20 +10,37 @@ use Tuchsoft\IssueReporter\Format\Base\FormatInterface;
 use Tuchsoft\IssueReporter\Format\Checkstyle;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
-use Tuchsoft\IssueReporter\Test\Base\AbstractTestFormat;
-use Tuchsoft\IssueReporter\Test\Base\ReportProvider;
+use Tuchsoft\IssueReporter\Test\Base\AbstractXmlFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\Provider\ReportProvider;
 
+/**
+ * Tests for the Checkstyle format.
+ *
+ * This class contains unit tests for both generating and parsing Checkstyle XML reports.
+ * It verifies that the output is well-formed and respects various formatting options,
+ * and that parsing correctly handles valid and invalid inputs.
+ */
 #[CoversClass(\Tuchsoft\IssueReporter\Format\Checkstyle::class)]
 #[Group('Checkstyle')]
-class CheckstyleTest extends AbstractTestFormat
+class CheckstyleTest extends AbstractXmlFormatTest
 {
     use ReportProvider;
 
     /**
+     * The Checkstyle formatter instance used for testing.
      * @var Checkstyle $formatter
      */
     protected FormatInterface $formatter;
-    
+
+    /**
+     * The class name of the formatter under test.
+     * @var string
+     */
+    protected static string $formatterClass = Checkstyle::class;
+
+    /**
+     * Sets up the test environment before each test.
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -31,201 +48,305 @@ class CheckstyleTest extends AbstractTestFormat
     }
 
     /**
-     * Verifies that the generate method produces a valid Checkstyle XML string.
+     * Data provider for testing generation with option combinations.
+     * Tests combinations of 'parse-message', 'show-help', and 'show-ref'.
+     *
+     * @return array<string, array{options: array<string, bool>, expected: array<int, array<string, mixed>>}> Test cases.
      */
-    public function testGenerateProducesCorrectXmlFormat(): void
+    public static function generateProvider(): array
     {
-        $report = $this->createTestReport();
-        $x = $report->getIssues();
+
+        $expected = [
+            ['ERROR on line 10:5 - ', 'This is a critical error.', '  (Help message for a critical error)', '  [https://example.com/error-example]', ],
+            ['WARNING on line 25:15 - ', 'This is a warning.', '  (Help message for a warning)', '', ],
+            ['TIP on line 50 - ', 'This is just a helpful tip.', '', '  [https://example.com/tip-example]', ],
+            [ 'WARNING - ', 'This issue has no line number.', '', '',],
+            [],
+            ['WARNING - ', 'This warning is outside src', '  (So the computed basepath should be equal to /project/base)', '', ],
+            ['ERROR - ', 'This error is outside src', '  (Random help)', '  [https://example.com/random]',]
+        ];
+
+        return [
+            'Default (no option)' => [
+                'options' => [],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][0].$expected[0][1].$expected[0][2],
+                        'line' => 10,
+                        'column' => 5,
+                        'source' => '0error.rule',
+                        'severity' => 'error',
+                        'path' => '/project/base/src/File1.php'
+                    ],
+                    1 => [
+                        'message' => $expected[1][0].$expected[1][1].$expected[1][2],
+                    ],
+                    2 => [
+                        'message' => $expected[2][0].$expected[2][1].$expected[2][2],
+                        'line' => 50,
+                        'column' => 0,
+                        'source' => '2tip.rule',
+                        'severity' => 'info',
+                        'path' => '/project/base/src/File2.php'
+                    ],
+                    3 => [
+                        'message' => $expected[3][0].$expected[3][1].$expected[3][2],
+                        'line' => 0,
+                        'column' => 0,
+                        'source' => '3noline.rule',
+                        'severity' => 'warning',
+                        'path' => '/project/base/src/File3.php'
+                    ],
+                    5 => [
+                        'message' => $expected[5][0].$expected[5][1].$expected[5][2],
+                        'line' => 0,
+                        'column' => 0,
+                        'source' => '5outside.src',
+                        'severity' => 'warning',
+                        'path' => '/project/base/xyz/File.php'
+                    ],
+                    6 => [
+                        'message' => $expected[6][0].$expected[6][1].$expected[6][2],
+                    ]
+                ],
+            ],
+            'No parse-message,  show-help & show-ref' => [
+                'options' => ['parse-message' => false, 'show-help' => true, 'show-ref' => true],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][1]
+                    ],
+                    3 => [
+                        'message' => $expected[3][1]
+                    ]
+                ],
+            ],
+            'Parse-message, show-help & show-ref' => [
+                'options' => ['parse-message' => true, 'show-help' => true, 'show-ref' => true],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][0].$expected[0][1].$expected[0][2].$expected[0][3],
+                    ],
+                    3 => [
+                        'message' => $expected[3][0].$expected[3][1].$expected[3][2].$expected[3][3],
+                    ]
+                ],
+            ],
+            'Parse-message, mo show-help, show-ref' => [
+                'options' => ['parse-message' => true, 'show-help' => false, 'show-ref' => true],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][0].$expected[0][1].$expected[0][3],
+                    ],
+                    3 => [
+                        'message' => $expected[3][0].$expected[3][1].$expected[3][3],
+                    ]
+                ],
+            ],
+            'Parse-message, show-help, no show-ref' => [
+                'options' => ['parse-message' => true, 'show-help' => true, 'show-ref' => false],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][0].$expected[0][1].$expected[0][2],
+                    ],
+                    3 => [
+                        'message' => $expected[3][0].$expected[3][1].$expected[3][2],
+                    ]
+                ],
+            ],
+            'Parse-message, no show-help, no show-ref' => [
+                'options' => ['parse-message' => true, 'show-help' => false, 'show-ref' => false],
+                'expected' => [
+                    0 => [
+                        'message' => $expected[0][0].$expected[0][1],
+                    ],
+                    3 => [
+                        'message' => $expected[3][0].$expected[3][1],
+                    ]
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Data provider for testing 'parse-message' option during parsing.
+     * Note: 'show-help' and 'show-ref' are generation-only options and do not affect parsing.
+     *
+     * @return array<string, array{options: array<string, bool>, xmlInput: string, expectedIssues: array<int, array<string, mixed>>}> Test cases.
+     */
+    public static function parseProvider(): array
+    {
+        $msg1 = 'This is an error.';
+        $msg2_parsable = 'Warning on line 13:12 - This is a warning. (still [message])  (This is help.)  [https://ref.com]';
+        $msg3 = 'This is a tip.';
+
+        $xmlTemplate = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="3.13.3">
+ <file name="src/File1.php">
+  <error line="10" column="5" severity="error" message="%s" source="Some.Error.Rule"/>
+  <error line="20" column="15" severity="warning" message="%s" source="Some.Warning.Rule"/>
+  <error line="30" column="1" severity="info" message="%s" source="Some.Tip.Rule"/>
+ </file>
+</checkstyle>
+XML;
+        $xmlInput = sprintf($xmlTemplate, htmlspecialchars($msg1), htmlspecialchars($msg2_parsable), htmlspecialchars($msg3));
+
+        return [
+            'parse-message disabled' => [
+                'options' => ['parse-message' => false],
+                'xmlInput' => $xmlInput,
+                'expectedIssues' => [
+                    ['message' => $msg1, 'help' => '', 'ref' => '', 'severity' => Issue::SEVERITY_ERROR],
+                    ['message' => $msg2_parsable, 'help' => '', 'ref' => '', 'severity' => Issue::SEVERITY_WARNING],
+                    ['message' => $msg3, 'help' => '', 'ref' => '', 'severity' => Issue::SEVERITY_TIP],
+                ],
+            ],
+            'parse-message enabled' => [
+                'options' => ['parse-message' => true],
+                'xmlInput' => $xmlInput,
+                'expectedIssues' => [
+                    ['message' => 'This is an error.', 'help' => '', 'ref' => '', 'severity' => Issue::SEVERITY_ERROR],
+                    ['message' => 'This is a warning. (still [message])', 'help' => 'This is help.', 'ref' => 'https://ref.com', 'severity' => Issue::SEVERITY_WARNING],
+                    ['message' => 'This is a tip.', 'help' => '', 'ref' => '', 'severity' => Issue::SEVERITY_TIP],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Verifies that the generate method produces a valid Checkstyle XML string, respecting options.
+     *
+     * @param array<string, bool> $options The formatting options.
+     * @param array<int, array<string, mixed>> $expected The expected data for assertions.
+     */
+    #[DataProvider('generateProvider')]
+    public function testGenerate(array $options, array $expected): void
+    {
+        $this->formatter->setOptions($options);
+
+        $report = self::getFixedTestReport();
         $xmlOutput = $this->formatter->generate($report);
 
-        // Basic XML validation
-        $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $xmlOutput);
         libxml_use_internal_errors(true);
         $xml = simplexml_load_string($xmlOutput);
         $this->assertInstanceOf(SimpleXMLElement::class, $xml, 'Generated output is not valid XML.');
 
-        // Check root <checkstyle> element
-        $this->assertEquals('checkstyle', $xml->getName());
-
-        // Iterate through each file in the report and verify its <file> element
-        foreach ($report->getIssues() as $path => $issuesInFile) {
-            $fileNode = $xml->xpath("//file[@name='{$path}']");
-            $this->assertCount(1, $fileNode, "File element for path '{$path}' not found or not unique.");
-            $fileElement = $fileNode[0];
-
-            $this->assertCount(count($issuesInFile), $fileElement->error, "Incorrect number of <error> elements for file '{$path}'.");
-
-            // Sort issues to have a predictable order for comparison
-            usort($issuesInFile, fn(Issue $a, Issue $b) => $a->getLine() <=> $b->getLine());
-            $errorElements = [];
-            foreach ($fileElement->error as $error) {
-                $errorElements[] = $error;
+        // Get all file and error nodes in the correct order
+        $xmlIssues = [];
+        $xmlFiles = $xml->xpath('//file');
+        foreach ($xmlFiles as $file) {
+            foreach ($file->error as $error) {
+                $xmlIssues[] = $error;
             }
-            usort($errorElements, fn($a, $b) => (int)$a['line'] <=> (int)$b['line']);
+        }
 
-            /** @var Issue $originalIssue */
-            foreach ($issuesInFile as $index => $originalIssue) {
-                $errorElement = $errorElements[$index];
+        usort($xmlIssues, fn(SimpleXMLElement $a, SimpleXMLElement $b) => strcmp((string)$a['source'], (string)$b['source']));
 
-                $this->assertEquals((string)$originalIssue->getLine(), (string)$errorElement['line']);
-                $this->assertEquals((string)$originalIssue->getColumn(), (string)$errorElement['column']);
-                $this->assertEquals($originalIssue->getMessage(), (string)$errorElement['message']);
-                $this->assertEquals($originalIssue->getCode(), (string)$errorElement['source']);
+        // Check if the number of issues in the XML matches the expected count
+        $this->assertCount(count($report->getIssues(false)), $xmlIssues, 'Generated XML contains an unexpected number of issues.');
 
-                // Check severity mapping
-                $expectedSeverity = match ($originalIssue->getSeverity()) {
-                    Report::SEVERITY_ERROR => 'error',
-                    default => 'warning', // WARNING and TIP map to 'warning'
-                };
-                $this->assertEquals($expectedSeverity, (string)$errorElement['severity']);
+        // Loop through the expected data and verify each issue.
+        foreach ($expected as $index => $data) {
+            $this->assertArrayHasKey($index, $xmlIssues, "Error element at index $index not found in XML output.");
+
+            $xmlIssue = $xmlIssues[$index];
+
+            // Verify each property that is explicitly provided in the data provider array
+            foreach ($data as $key => $value) {
+                switch ($key) {
+                    case 'message':
+                        $this->assertEquals($value, (string)$xmlIssue['message'], "Message mismatch for issue at index $index.");
+                        break;
+                    case 'line':
+                        $this->assertEquals($value, (int)$xmlIssue['line'], "Line mismatch for issue at index $index.");
+                        break;
+                    case 'column':
+                        $this->assertEquals($value, (int)$xmlIssue['column'], "Column mismatch for issue at index $index.");
+                        break;
+                    case 'source':
+                        $this->assertEquals($value, (string)$xmlIssue['source'], "Source mismatch for issue at index $index.");
+                        break;
+                    case 'severity':
+                        $this->assertEquals($value, (string)$xmlIssue['severity'], "Severity mismatch for issue at index $index.");
+                        break;
+                    case 'path':
+                        $parentFile = $xmlIssue->xpath('parent::file');
+                        $this->assertEquals($value, (string)$parentFile[0]['name'], "Path mismatch for issue at index $index.");
+                        break;
+                }
             }
         }
     }
 
     /**
-     * Data provider for testing XML formatting options.
-     */
-    public static function xmlOptionsProvider(): array
-    {
-        return [
-            'pretty disabled (default)' => ['options' => ['pretty' => false], 'isPretty' => false],
-            'pretty enabled' => ['options' => ['pretty' => true], 'isPretty' => true],
-        ];
-    }
-
-    /**
-     * Tests the XML encoding options from XmlFormatTrait.
+     * Verifies that the parse method correctly constructs a Report object, respecting options.
      *
-     * @param array<string, bool> $options The XML formatting options.
-     * @param bool $isPretty Whether the output should be pretty-printed.
+     * @param array<string, bool> $options The parsing options.
+     * @param string $xmlInput The Checkstyle XML string to parse.
+     * @param array<int, array<string, mixed>> $expectedIssues The expected issue data after parsing.
      */
-    #[DataProvider('xmlOptionsProvider')]
-    public function testGenerateWithXmlFormattingOptions(array $options, bool $isPretty): void
+    #[DataProvider('parseProvider')]
+    public function testParse(array $options, string $xmlInput, array $expectedIssues): void
     {
         $this->formatter->setOptions($options);
-        $report = $this->createTestReport();
-        $xmlOutput = $this->formatter->generate($report);
-
-        // A pretty-printed XML will contain newlines for indentation.
-        // A non-pretty one will be a single line (after the XML declaration).
-        $hasNewlines = str_contains(trim(substr($xmlOutput, strpos($xmlOutput, '?>') + 2)), "\n");
-        $this->assertEquals($isPretty, $hasNewlines);
-    }
-
-    /**
-     * Verifies that the parse method correctly constructs a Report object.
-     */
-    public function testParseCreatesCorrectReportObject(): void
-    {
-        $xmlInput = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<checkstyle version="3.13.3">
- <file name="src/File1.php">
-  <error line="10" column="5" severity="error" message="This is an error." source="Some.Error.Rule"/>
-  <error line="20" column="15" severity="warning" message="This is a warning." source="Some.Warning.Rule"/>
-  <error line="30" column="1" severity="info" message="This is a tip." source="Some.Tip.Rule"/>
- </file>
-</checkstyle>
-XML;
 
         $report = $this->formatter->parse($xmlInput, 'Parsed Checkstyle Report');
         $this->assertInstanceOf(Report::class, $report);
         $this->assertEquals('Parsed Checkstyle Report', $report->getName());
 
         $issues = $report->getIssues(false, false);
-        $this->assertCount(3, $issues);
+        $this->assertCount(count($expectedIssues), $issues);
 
         // Sort issues by line number to ensure consistent order for testing
         usort($issues, fn(Issue $a, Issue $b) => $a->getLine() <=> $b->getLine());
 
-        // Check the error issue
-        $errorIssue = $issues[0];
-        $this->assertEquals('src/File1.php', $errorIssue->getPath());
-        $this->assertEquals(10, $errorIssue->getLine());
-        $this->assertEquals(5, $errorIssue->getColumn());
-        $this->assertEquals('This is an error.', $errorIssue->getMessage());
-        $this->assertEquals('Some.Error.Rule', $errorIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_ERROR, $errorIssue->getSeverity());
-
-        // Check the warning issue
-        $warningIssue = $issues[1];
-        $this->assertEquals('src/File1.php', $warningIssue->getPath());
-        $this->assertEquals(20, $warningIssue->getLine());
-        $this->assertEquals(15, $warningIssue->getColumn());
-        $this->assertEquals('This is a warning.', $warningIssue->getMessage());
-        $this->assertEquals('Some.Warning.Rule', $warningIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_WARNING, $warningIssue->getSeverity());
-
-        // Check the tip (info) issue
-        $tipIssue = $issues[2];
-        $this->assertEquals('src/File1.php', $tipIssue->getPath());
-        $this->assertEquals(30, $tipIssue->getLine());
-        $this->assertEquals(1, $tipIssue->getColumn());
-        $this->assertEquals('This is a tip.', $tipIssue->getMessage());
-        $this->assertEquals('Some.Tip.Rule', $tipIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_TIP, $tipIssue->getSeverity());
-    }
-
-    /**
-     * Verifies that the parse method throws an exception for malformed XML.
-     */
-    public function testParseThrowsExceptionForInvalidXml(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Failed to parse XML:');
-        $this->formatter->parse('<checkstyle><file></checkstyle>'); // Malformed XML
-    }
-
-    /**
-     * Tests the full cycle of generating a report and then parsing it back.
-     * This test highlights inconsistencies between the generate and parse methods.
-     */
-    public function testGenerateAndParseRoundTrip(): void
-    {
-        // 1. Create an initial report
-        $originalReport = $this->createTestReport();
-
-        // 2. Generate the XML string from it and parse it back
-        $xmlOutput = $this->formatter->generate($originalReport);
-        $parsedReport = $this->formatter->parse($xmlOutput);
-
-        // 3. Compare the meaningful data of the reports
-        self::assertEqualReport(
-            $originalReport,
-            $parsedReport,
-            name: $this->formatter->getDefaultReportName(),
-            warnings: $originalReport->getTotalWarnings()+$originalReport->getTotalTips(),
-            tips: 0
-        );
-
-        $originalIssues = $originalReport->getIssues(false, true);
-        $parsedIssues = $parsedReport->getIssues(false, false);
-
-        $this->assertCount(count($originalIssues), $parsedIssues);
-
-        // Sort issues to ensure consistent order for comparison
-        $sortFunc = fn(Issue $a, Issue $b) => strcmp($a->getPath() . $a->getLine(), $b->getPath() . $b->getLine());
-        usort($originalIssues, $sortFunc);
-        usort($parsedIssues, $sortFunc);
-
-        foreach ($originalIssues as $i => $originalIssue) {
-            $parsedIssue = $parsedIssues[$i];
-
-            $this->assertEquals($originalIssue->getPath(), $parsedIssue->getPath());
-            $this->assertEquals($originalIssue->getLine(), $parsedIssue->getLine());
-            $this->assertEquals($originalIssue->getColumn(), $parsedIssue->getColumn());
-            $this->assertEquals($originalIssue->getCode(), $parsedIssue->getCode());
-            $this->assertEquals($originalIssue->getMessage(), $parsedIssue->getMessage());
-
-            // KNOWN INCONSISTENCY: `generate` maps TIP to 'warning'.
-            // `parse` maps 'warning' back to SEVERITY_WARNING.
-            // So, an original TIP becomes a WARNING after the round trip.
-            $expectedSeverity = ($originalIssue->getSeverity() === Report::SEVERITY_TIP)
-                ? Report::SEVERITY_WARNING
-                : $originalIssue->getSeverity();
-
-            $this->assertEquals($expectedSeverity, $parsedIssue->getSeverity());
+        foreach ($issues as $index => $issue) {
+            $expected = $expectedIssues[$index];
+            $this->assertEquals($expected['message'], $issue->getMessage());
+            $this->assertEquals($expected['help'], $issue->getHelp());
+            $this->assertEquals($expected['ref'], $issue->getRef());
+            $this->assertEquals($expected['severity'], $issue->getSeverity());
         }
+
+        $this->assertEquals('src/File1.php', $issues[0]->getPath());
+        $this->assertEquals(10, $issues[0]->getLine());
+        $this->assertEquals(5, $issues[0]->getColumn());
+        $this->assertEquals('Some.Error.Rule', $issues[0]->getCode());
+
+        $this->assertEquals('src/File1.php', $issues[1]->getPath());
+        $this->assertEquals(20, $issues[1]->getLine());
+        $this->assertEquals(15, $issues[1]->getColumn());
+        $this->assertEquals('Some.Warning.Rule', $issues[1]->getCode());
+    }
+
+
+    /**
+     * Verifies that parsing an empty but valid Checkstyle report results in a Report object with no issues.
+     */
+    public function testParseEmptyReport(): void
+    {
+        $report = $this->formatter->parse('<?xml version="1.0" encoding="UTF-8"?><checkstyle version="3.13.3"></checkstyle>');
+        $this->assertNotNull($report);
+        $this->assertEmpty($report->getIssues(false));
+    }
+
+    /**
+     * Verifies that non-standard tags within a Checkstyle report are ignored during parsing.
+     */
+    public function testParseReportWithNonStandardTag(): void
+    {
+        $report = $this->formatter->parse('<?xml version="1.0" encoding="UTF-8"?><checkstyle version="3.13.3"><hello>word</hello></checkstyle>');
+        $this->assertNotNull($report);
+        $this->assertEmpty($report->getIssues(false));
+    }
+
+    /**
+     * Verifies that parsing an XML file that is not a valid Checkstyle report throws an exception.
+     */
+    public function testParseNonCheckStyleReport(): void
+    {
+        $this->expectExceptionMessageMatches("/Invalid XML input.*/");
+        $this->formatter->parse('<?xml version="1.0" encoding="UTF-8"?><testsuites name="xxx"></testsuites>');
     }
 }

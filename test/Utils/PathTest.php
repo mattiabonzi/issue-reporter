@@ -48,6 +48,8 @@ class PathTest extends TestCase
         return [
             'empty array' => [[], ''],
             'single path' => [['/var/www/project/file1.php'], '/var/www/project/'],
+            'single relative path' => [['var/www/project/file1.php'], './var/www/project/'],
+            'single short relative path' => [['src/File1.php'], './src/'],
             'two simple paths' => [['/var/www/project/file1.php', '/var/www/project/file2.php'], '/var/www/project/'],
             'different subdirectories' => [['/var/www/project/src/file1.php', '/var/www/project/tests/file2.php'], '/var/www/project/'],
             'deeper common path' => [['/var/www/project/src/x/y/z/file1.php', '/var/www/project/src/x/y/z/file2.php'], '/var/www/project/src/x/y/z/'],

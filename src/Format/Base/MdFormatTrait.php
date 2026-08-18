@@ -4,7 +4,6 @@ namespace Tuchsoft\IssueReporter\Format\Base;
 
 use DavidBadura\MarkdownBuilder\MarkdownBuilder;
 use Symfony\Component\Console\Output\BufferedOutput;
-use Tuchsoft\IssueReporter\Report;
 
 trait MdFormatTrait
 {
@@ -21,9 +20,9 @@ trait MdFormatTrait
     protected function getSeverityIcon(int $severity): string
     {
         return $this->getSeverityEmoji($severity) .  match ($severity) {
-            Report::SEVERITY_ERROR => 'ERROR',
-            Report::SEVERITY_WARNING => 'WARNING',
-            Report::SEVERITY_TIP => 'TIP'
+            Issue::SEVERITY_ERROR => 'ERROR',
+            Issue::SEVERITY_WARNING => 'WARNING',
+            Issue::SEVERITY_TIP => 'TIP'
         };
     }
 

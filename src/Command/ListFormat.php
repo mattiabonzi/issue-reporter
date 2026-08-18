@@ -7,6 +7,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\ListCommand;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Helper\DescriptorHelper;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -15,16 +16,18 @@ use Tuchsoft\IssueReporter\Factory;
 use Tuchsoft\IssueReporter\Format\Base\NativeFormatInterface;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
 
-class ListFormat  extends ListCommand {
+class ListFormat  extends Command {
 
-    protected static $defaultName = 'list-format';
+    public static string $defaultName = 'list-format';
 
     protected function configure(): void
     {
         parent::configure();
         $this
+            ->setName(static::$defaultName)
             ->setDescription('Runs Moodle plugin checks and generates a report.')
-            ->setHelp("The <info>%command.name%</info> command lists all available output formats:\n\n<info>%command.full_name%</info>");
+            ->setHelp("The <info>%command.name%</info> command lists all available output formats:\n\n<info>%command.full_name%</info>")
+            ->addArgument('search', InputArgument::OPTIONAL);
     }
 
     public function execute(InputInterface $input, OutputInterface $output): int
@@ -32,8 +35,20 @@ class ListFormat  extends ListCommand {
         $io = new SymfonyStyle($input, $output);
         $io->getFormatter()->setStyle('cmd', new OutputFormatterStyle('bright-blue'));
         $io->getFormatter()->setStyle('txt', new OutputFormatterStyle('bright-white'));
-        $io->title('Available output format');
-        foreach (Factory::getRegistered(Factory::FORMAT) as $format) {
+
+        $formats = Factory::getRegistered(Factory::FORMAT);
+        if (($search = $input->getArgument('search'))) {
+            $names = $this->search($search, array_keys($formats));
+            if (!$names) {
+                $io->warning("No format found for: '$search'");
+            }
+            $formats = array_filter($formats, fn ($k) => in_array($k, $names), ARRAY_FILTER_USE_KEY);
+            $io->title('Found output format (more available)');
+        } else {
+            $io->title('Available output format');
+        }
+
+        foreach ($formats as $format) {
             $parsable = is_subclass_of($format, ParsableFormatInterface::class );
             $io->text("<txt>Name:</txt> <cmd>{$format::getName()}</cmd>");
             $io->text("<txt>Description:</txt> {$format::getDesc()}");
@@ -75,5 +90,27 @@ class ListFormat  extends ListCommand {
 
     private function list($io, $els) {
         $io->write(array_map(fn ($e) => '      - '.ucfirst(str_replace('-',' ', $e))."\n", $els));
+    }
+
+
+    private function search($input, $array): array {
+            $mostSimilar = '';
+            $highestSimilarity = 0;
+            $threshold = 60;
+            $similar = [];
+
+            foreach ($array as $string) {
+                similar_text($input, $string, $percent);
+                if ($percent > $highestSimilarity) {
+                    $highestSimilarity = $percent;
+                    $mostSimilar = $string;
+                }
+                if ($percent >= $threshold) {
+                    $similar[] = $string;
+                }
+            }
+
+            return !empty($similar) ? $similar : [$mostSimilar];
+
     }
 }

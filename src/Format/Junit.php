@@ -93,15 +93,15 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
 
 
                 $testCase = $dom->createElement('testcase');
-                $testCase->setAttribute('name', $this->options['show-code'] ? $issue->getCode() : $path);
+                $testCase->setAttribute('name',  $issue->getCode());
                 $testCase->setAttribute('file', $path);
                 $testCase->setAttribute('line', $issue->getLine());
 
                 $failure = $dom->createElement('failure');
 
-                if ($this->options['show-code']) {
-                    $failure->setAttribute('type', $issue->getCode());
-                }
+
+                $failure->setAttribute('type', $issue->getCode());
+
                 $failure->setAttribute('message', $issue->getMessage());
                 $fullMessage = $this->getParsableMessage($issue, true);
 
@@ -122,7 +122,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
             }
         }
 
-        return $this->saveXML($dom);
+        return $this->xmlEncode($dom);
     }
 
     /**
@@ -144,7 +144,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
 
         if ($xml === false) {
             $errors = libxml_get_errors();
-            $errorMessage = "Failed to parse XML: ";
+            $errorMessage = "Invalid XML input: ";
             foreach ($errors as $error) {
                 $errorMessage .= "{$error->message} ";
             }
@@ -171,7 +171,7 @@ class Junit extends AbstractFormat implements ParsableFormatInterface
                 $help = (string)($issueElement['message'] ? ($issueElement[0] ?? null) : $issueElement[1] ?? null);
 
 
-                $severity = Report::SEVERITY_ERROR;
+                $severity = Issue::SEVERITY_ERROR;
                 $code = (string)$issueElement['type'];
                 $line = (int)($testcase['line'] ?? 0);
                 $column = 0;

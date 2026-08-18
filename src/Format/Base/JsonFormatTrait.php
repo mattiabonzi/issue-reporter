@@ -29,6 +29,26 @@ trait JsonFormatTrait {
         return json_encode($value, $flags, 1024);
     }
 
+    protected function jsonDecode(string $json, bool $associative):mixed {
+        if (empty(trim($json))) {
+            throw new \InvalidArgumentException('Invalid JSON input: empty string');
+        }
+
+        $value =  json_decode($json, $associative, 1024, JSON_INVALID_UTF8_SUBSTITUTE );
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \InvalidArgumentException('Invalid JSON input: ' . json_last_error_msg());
+        }
+
+        if ($value === null) {
+            throw new \InvalidArgumentException('Invalid JSON input: Unknow error (input deserialized into NULL)');
+        }
+
+        return $value;
+    }
+
+
+
     public static function getFormat(): string
     {
         return self::FORMAT_JSON;

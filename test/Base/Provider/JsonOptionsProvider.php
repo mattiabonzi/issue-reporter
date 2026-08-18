@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Tuchsoft\IssueReporter\Test\Base;
+namespace Tuchsoft\IssueReporter\Test\Base\Provider;
 
 
 trait JsonOptionsProvider

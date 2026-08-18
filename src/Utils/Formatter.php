@@ -20,7 +20,7 @@ class Formatter Extends OutputFormatter {
         }
     }
 
-    public function format(?string $message)
+    public function format(?string $message): string
     {
         return $this->formatAndWrap($message, $this->maxWidth);
     }

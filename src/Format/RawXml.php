@@ -3,9 +3,12 @@
 namespace Tuchsoft\IssueReporter\Format;
 
 use DOMDocument;
+use DOMElement;
+use InvalidArgumentException;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
 use Tuchsoft\IssueReporter\Format\Base\XmlFormatTrait;
+use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
 
 
@@ -14,8 +17,23 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
 
     use XmlFormatTrait;
 
-    public function generate(Report $report): string
+    static function getDesc(): string
     {
+        return 'Complete JSON rappresetation';
+    }
+
+    public static function supports(): array
+    {
+        return self::FEATURE_ALL;
+    }
+
+    public static function supportsExtra(): array
+    {
+        return [];
+    }
+
+    public function generate(Report $report): string
+        {
         $dom = new DOMDocument('1.0', 'UTF-8');
         $root = $dom->createElement('report');
         $root->setAttribute('name', $report->getName());
@@ -28,28 +46,43 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
 
         $recursiveHelper = function ($array, $node, $keyName = null) use (&$recursiveHelper, $dom) {
             foreach ($array as $key => $value) {
-                $currentKeyName = $key;
+                $filename = '';
                 // Check for numeric keys and the specified array names
                 if (is_numeric($key) && $keyName === 'subReports') {
-                    $currentKeyName = 'report';
-                } elseif (is_numeric($key) && $keyName === 'issues') {
-                    $currentKeyName = 'issue';
+                    $key = 'report';
+                } else if (str_starts_with($key, '/') || str_starts_with($key, '.')) {
+                    $filename = $key;
+                    $key = 'file';
+
                 }
 
                 if (is_array($value)) {
-                    $childNode = $dom->createElement($currentKeyName);
+                    $childNode = $dom->createElement(strtolower($key));
+                    if ($key == 'file') {
+                        $childNode->setAttribute('path', $filename);
+                    }
                     $node->appendChild($childNode);
-                    $recursiveHelper($value, $childNode, $currentKeyName);
+                    $recursiveHelper($value, $childNode, $key);
+                } else if (is_a($value, Issue::class)) {
+                    $childNode = $dom->createElement('issue');
+                    foreach ($value->jsonSerialize() as $name => $val) {
+                        if (is_array($val)) {
+                            $recursiveHelper($val, $childNode);
+                        } else {
+                            $childNode->setAttribute($name, $val);
+                        }
+                    }
+                    $node->appendChild($childNode);
                 } else {
-                    $childNode = $dom->createElement($currentKeyName, htmlspecialchars((string)$value));
-                    $node->appendChild($childNode);
+                    $node->setAttribute($key, $value);
                 }
             }
         };
 
         $recursiveHelper($report->jsonSerialize(), $root);
 
-        return $this->saveXML($dom);
+        $x = $this->xmlEncode($dom);
+        return $x;
     }
 
     public function parse(string $input, ?string $name = null): Report
@@ -57,31 +90,17 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
         if (!$name) {
             $name = static::getDefaultReportName();
         }
-        $dom = new DOMDocument();
-        $dom->loadXML($input);
+        $dom = $this->xmlDecode($input);
         $root = $dom->documentElement;
 
         if ($root->nodeName !== 'report') {
-            throw new \InvalidArgumentException("Invalid XML format. Root element must be 'report'.");
+            throw new InvalidArgumentException("Invalid XML input: Root element must be 'report'.");
         }
 
         // Initialize the root report data structure.
-        $reportData = [
-            'name' => $name,
-            'issues' => [],
-            'subReports' => [],
-            'timeStart' => (float) $root->getAttribute('timeStart'),
-            'timeEnd' => (float) $root->getAttribute('timeEnd'),
-            // Note: fromJson doesn't use these attributes, so they're not strictly necessary here,
-            // but it's good practice to capture them if available.
-            'totalErrors' => (int) $root->getAttribute('errors'),
-            'totalWarnings' => (int) $root->getAttribute('warnings'),
-            'totalTips' => (int) $root->getAttribute('tips'),
-            'totalFiles' => (int) $root->getAttribute('files'),
-            'totalTime' => (float) $root->getAttribute('time'),
-        ];
+        $reportData = ['name' => $name, 'issues' => [], 'subReports' => [], 'timeStart' => (float)$root->getAttribute('timeStart'), 'timeEnd' => (float)$root->getAttribute('timeEnd'), 'totalTime' => (float)$root->getAttribute('time'), 'basePath' => (string)$root->getAttribute('basePath'),];
 
-        $recursiveHelper = function (\DOMElement $node) use (&$recursiveHelper) {
+        $recursiveHelper = function (DOMElement $node) use (&$recursiveHelper) {
             $result = ['issues' => [], 'subReports' => []];
 
             foreach ($node->childNodes as $childNode) {
@@ -89,19 +108,10 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
                     continue;
                 }
 
-                if ($childNode->nodeName === 'subReports') {
+                if ($childNode->nodeName === 'subreports') {
                     foreach ($childNode->childNodes as $subReportNode) {
                         if ($subReportNode->nodeType === XML_ELEMENT_NODE && $subReportNode->nodeName === 'report') {
-                            $subReportArray = [
-                                'name' => $subReportNode->getAttribute('name'),
-                                'timeStart' => (float) $subReportNode->getAttribute('timeStart'),
-                                'timeEnd' => (float) $subReportNode->getAttribute('timeEnd'),
-                                'totalErrors' => (int) $subReportNode->getAttribute('errors'),
-                                'totalWarnings' => (int) $subReportNode->getAttribute('warnings'),
-                                'totalTips' => (int) $subReportNode->getAttribute('tips'),
-                                'totalFiles' => (int) $subReportNode->getAttribute('files'),
-                                'totalTime' => (float) $subReportNode->getAttribute('time'),
-                            ];
+                            $subReportArray = ['name' => $subReportNode->getAttribute('name'), 'timeStart' => (float)$subReportNode->getAttribute('timeStart'), 'timeEnd' => (float)$subReportNode->getAttribute('timeEnd'), 'totalErrors' => (int)$subReportNode->getAttribute('errors'), 'totalWarnings' => (int)$subReportNode->getAttribute('warnings'), 'totalTips' => (int)$subReportNode->getAttribute('tips'), 'totalFiles' => (int)$subReportNode->getAttribute('files'), 'totalTime' => (float)$subReportNode->getAttribute('time'),];
                             // Merge recursive call result for issues and subReports
                             $parsedChildren = $recursiveHelper($subReportNode);
                             $subReportArray['issues'] = $parsedChildren['issues'];
@@ -110,23 +120,28 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
                         }
                     }
                 } elseif ($childNode->nodeName === 'issues') {
-                    foreach ($childNode->childNodes as $issueNode) {
-                        if ($issueNode->nodeType === XML_ELEMENT_NODE && $issueNode->nodeName === 'issue') {
-                            $issueData = [
-                                'message' => $this->getXmlNodeValue($issueNode, 'message'),
-                                'line' => (int) $this->getXmlNodeValue($issueNode, 'line'),
-                                'column' => (int) $this->getXmlNodeValue($issueNode, 'column'),
-                                'path' => $this->getXmlNodeValue($issueNode, 'path'),
-                                'code' => $this->getXmlNodeValue($issueNode, 'code'),
-                                'severity' => (int) $this->getXmlNodeValue($issueNode, 'severity')
-                            ];
-                            // The fromJson method expects a file-based structure for issues.
-                            // We must format it correctly here.
-                            $path = $issueData['path'];
-                            if (!isset($result['issues'][$path])) {
-                                $result['issues'][$path] = [];
+                    foreach ($childNode->childNodes as $file) {
+                        if ($file->nodeType === XML_ELEMENT_NODE && $file->nodeName === 'file') {
+                            foreach ($file->childNodes as $issueNode) {
+                                /** @var DOMElement $issueNode
+                                 */
+                                if ($issueNode->nodeType === XML_ELEMENT_NODE && $issueNode->nodeName === 'issue') {
+                                    $issueData = [
+                                        'message' => $issueNode->getAttribute('message'),
+                                        'line' => $issueNode->getAttribute( 'line'),
+                                        'column' => $issueNode->getAttribute('column'),
+                                        'path' => $issueNode->getAttribute('path'),
+                                        'code' => $issueNode->getAttribute( 'code'),
+                                        'severity' => $issueNode->getAttribute('severity')];
+                                    // The fromJson method expects a file-based structure for issues.
+                                    // We must format it correctly here.
+                                    $path = $issueData['path'];
+                                    if (!isset($result['issues'][$path])) {
+                                        $result['issues'][$path] = [];
+                                    }
+                                    $result['issues'][$path][] = $issueData;
+                                }
                             }
-                            $result['issues'][$path][] = $issueData;
                         }
                     }
                 }
@@ -146,30 +161,14 @@ class RawXml extends AbstractFormat implements ParsableFormatInterface
     /**
      * Helper function to safely get a node's value.
      *
-     * @param \DOMElement $parent
+     * @param DOMElement $parent
      * @param string $tagName
      * @return string
      */
-    private function getXmlNodeValue(\DOMElement $parent, string $tagName): string
+    private function getXmlNodeValue(DOMElement $parent, string $tagName): string
     {
         $node = $parent->getElementsByTagName($tagName)->item(0);
         return $node ? $node->nodeValue : '';
-    }
-
-    static function getDesc(): string
-    {
-        return 'Complete JSON rappresetation';
-    }
-
-
-    public static function supports(): array
-    {
-        return self::FEATURE_ALL;
-    }
-
-    public static function supportsExtra(): array
-    {
-        return [];
     }
 
 

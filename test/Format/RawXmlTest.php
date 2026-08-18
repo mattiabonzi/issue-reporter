@@ -1,51 +1,38 @@
 <?php
 
-namespace Tuchsoft\IssueReporter\Test\Format;
+namespace Format;
 
 
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tuchsoft\IssueReporter\Format\Base\FormatInterface;
 use Tuchsoft\IssueReporter\Format\Raw;
+use Tuchsoft\IssueReporter\Format\RawXml;
 use Tuchsoft\IssueReporter\Test\Base\AbstractJsonFormatTest;
-use Tuchsoft\IssueReporter\Test\Base\AbstractParsableFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\AbstractXmlFormatTest;
 use Tuchsoft\IssueReporter\Test\Base\Provider\JsonOptionsProvider;
 use Tuchsoft\IssueReporter\Test\Base\Provider\ReportProvider;
 
 
-/**
- * Tests for the Raw format.
- *
- * The Raw format is a direct JSON serialization of the Report object.
- */
-#[CoversClass(\Tuchsoft\IssueReporter\Format\Raw::class)]
-#[Group('Raw')]
-class RawTest extends AbstractJsonFormatTest
+#[CoversClass(\Tuchsoft\IssueReporter\Format\RawXml::class)]
+#[Group('RawXml')]
+class RawXmlTest extends AbstractXmlFormatTest
 {
     use ReportProvider;
     use JsonOptionsProvider;
 
     /**
-     * The Raw formatter instance used for testing.
-     * @var Raw
+     * @var Raw $formatter
      */
     protected FormatInterface $formatter;
-
-    /**
-     * The class name of the formatter under test.
-     * @var class-string<Raw>
-     */
-    protected static string $formatterClass = Raw::class;
+    protected static string $formatterClass = RawXml::class;
 
 
-    /**
-     * Sets up the test environment before each test.
-     */
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->formatter = new Raw();
+        $this->formatter = new RawXml();
     }
 
 
@@ -57,9 +44,13 @@ class RawTest extends AbstractJsonFormatTest
     public function testParseThrowsExceptionForInvalidStructure(): void
     {
         $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Missing required field: name');
+        $this->expectExceptionMessage('Missing required field: basePath');
         // A valid JSON, but not a valid Report structure
-        $this->formatter->parse('{"issues": []}');
+        $xml = '<?xml version="1.0" encoding="UTF-8"?><report><issues></issues></report>';
+        $this->formatter->parse($xml);
     }
 
+
+
 }
+

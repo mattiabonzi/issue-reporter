@@ -24,9 +24,9 @@ class Sarif extends AbstractFormat implements ParsableFormatInterface
      * Maps internal severity constants to SARIF's result level.
      */
     const SEVERITY_TO_SARIF_LEVEL_MAP = [
-        Report::SEVERITY_ERROR => 'error',
-        Report::SEVERITY_WARNING => 'warning',
-        Report::SEVERITY_TIP => 'note',
+        Issue::SEVERITY_ERROR => 'error',
+        Issue::SEVERITY_WARNING => 'warning',
+        Issue::SEVERITY_TIP => 'note',
     ];
 
     /**
@@ -191,7 +191,7 @@ class Sarif extends AbstractFormat implements ParsableFormatInterface
                     'column' => $column,
                     'path' => $path,
                     'code' => $ruleId,
-                    'severity' => $sarifLevelToInternal[$level] ?? Report::SEVERITY_WARNING,
+                    'severity' => $sarifLevelToInternal[$level] ?? Issue::SEVERITY_WARNING,
                 ];
 
                 // Check for 'help' and 'ref' fields.

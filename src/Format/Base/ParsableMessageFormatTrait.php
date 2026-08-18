@@ -3,6 +3,7 @@
 namespace Tuchsoft\IssueReporter\Format\Base;
 
 
+use Symfony\Component\Console\Input\InputOption;
 use Tuchsoft\IssueReporter\Issue;
 
 /**
@@ -15,9 +16,8 @@ use Tuchsoft\IssueReporter\Issue;
 trait ParsableMessageFormatTrait {
 
 
-    private string $PARSABLE_EMACCS_REGEX = "^(?<path>[^:]+):(?<line>\d+):(?<col>\d+):\s(?<severity>[a-z]+)\s-\s(?<message>.+?)\s*(?:\(#(?<code>.+?)\))?";
-    private string  $PARSABLE_MSG_REGEX = "(?<message>.+?(?=[\(\[]))";
-    private string $PARSABLE_EXTRA_REGEX = "(?:\s*\((?<help>.+)\))?(?:\s*\[(?<ref>.+)\])?$";
+
+    private static string $parsable_message_regex = "/(?<severity>[A-Za-z]+?)\s*(?:on\sline\s(?<line>\d+))?(?::(?<col>\d+))?\s*-\s*(?<message>.+?)(?:\s{2,}\((?<help>.+)\))?(?:\s{2,}\[(?<ref>.+)\])?$/";
     /**
      * @var array<string, mixed> Formatting options.
      * Expected keys: 'show-help' (bool), 'show-ref' (bool).
@@ -27,50 +27,47 @@ trait ParsableMessageFormatTrait {
     /**
      * Constructs a message string from an Issue, optionally appending help and reference info.
      *
-     * The format is "message (help) [ref]".
+     * The format is "Error/Warning/Tip on line x:x - msg (help) [ref]".
      *
      * @param Issue $issue The issue to get the message from.
      * @return string The formatted message string.
      */
-    protected function getParsableMessage(Issue $issue, bool $emacs = false, ?string $severity = null): string {
-        if ($emacs) {
-            if (!$severity) {
-                $severity = $issue->getSeverityString();
-            }
-            $message = sprintf(
-                "%s:%d:%d: %s - %s (#%s)",
-                $issue->getPath(),
-                $issue->getLine(),
-                $issue->getColumn(),
-                $severity,
-                $issue->getMessage(),
-                $issue->getCode()
-            );
-        } else {
-            $message = $issue->getMessage();
+    protected function getParsableMessage(Issue $issue): string {
+        if (!$this->options['parse-message']) {
+            return $issue->getMessage();
         }
-
-        if ($this->options['show-help'] && $issue->getHelp()) {
-            $message .= " ({$issue->getHelp()})";
-        }
-        if ($this->options['show-ref'] && $issue->getRef()) {
-            $message .= " [{$issue->getRef()}]";
-        }
-        return $message;
+        //Error/Warning/Tip on line x:x - msg (help) [ref]
+        return ucfirst($issue->getSeverityString()).
+            ($issue->getLine() ? (' on line '.$issue->getLine()) : '').
+            ($issue->getLine() && $issue->getColumn() ? (':'.$issue->getColumn()) : '').
+            ' - '.
+            $issue->getMessage().
+            ($this->options['show-help'] && $issue->getHelp() ? "  ({$issue->getHelp()})" : '').
+            ($this->options['show-ref'] && $issue->getRef() ? "  [{$issue->getRef()}]" : '');
     }
 
     /**
      * Parses a message string to extract the core message, help text, and reference.
      *
-     * It expects the format "message (help) [ref]".
+     * It expects the format (inside [] are optional) "ERROR/WARNING/TIP[ on line x:x] - msg[ (help)] [\[ref\]]".
      *
      * @param string $message The message string to parse.
      * @return array{message: string, help: string|null, ref: string|null} An associative array containing the parsed parts.
      */
-    protected function parseMessage(string $message, bool $emacs = false): array
+    protected function parseMessage(string $message): array
     {
+        $original =  ['message' => trim($message)];
+        if (!$this->options['parse-message']) {
+            return $original;
+        }
         $parsed = [];
-        preg_match( '/'.($emacs ? $this->PARSABLE_EMACCS_REGEX : $this->PARSABLE_MSG_REGEX)."$this->PARSABLE_EXTRA_REGEX/", $message, $parsed);
-        return array_map('trim', $parsed);
+        preg_match( static::$parsable_message_regex, $message, $parsed);
+        $parsed = array_map('trim', $parsed);
+        return empty($parsed) ? $original : $parsed;
+    }
+
+
+    protected static function getParsableMessageOptions($returnType = self::OPTIONS_NORMAL): array {
+       return self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for additional field', true, $returnType);
     }
 }

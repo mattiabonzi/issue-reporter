@@ -35,7 +35,7 @@ class Path extends \Riimu\Kit\PathJoin\Path {
 
     public static function findCommonBasePath(array $paths): string {
         if (empty($paths)) {
-            return '';
+            return '/';
         }
 
 

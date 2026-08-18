@@ -2,7 +2,6 @@
 
 namespace Tuchsoft\IssueReporter\Format;
 
-use Symfony\Component\Console\Input\InputOption;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\JsonFormatTrait;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
@@ -33,7 +32,7 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
             $messages = [];
             /** @var Issue $issue */
             foreach ($issues as $issue) {
-                if ($issue->getSeverity() === Report::SEVERITY_ERROR) {
+                if ($issue->getSeverity() === Issue::SEVERITY_ERROR) {
                     $messageType = 'ERROR';
                     $errorsCount++;
                 } else {
@@ -53,9 +52,7 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                 ];
 
                 // 2. Correctly add 'source' to the individual message array.
-                if ($this->options['show-code']) {
-                    $messageData['source'] = $issue->getCode();
-                }
+                $messageData['source'] = $issue->getCode();
 
                 // 3. Correctly append help and ref info from the $issue object.
                 $messageData['message'] = $this->getParsableMessage($issue);
@@ -107,14 +104,14 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                     'path' => $filePath,
                     'code' => $issueData['source'] ?? Issue::UNKNOW_CODE,
                     'severity' => match ($issueData['type']) {
-                        'ERROR' => Report::SEVERITY_ERROR,
-                        'WARNING' => Report::SEVERITY_WARNING
+                        'ERROR' => Issue::SEVERITY_ERROR,
+                        'WARNING' => Issue::SEVERITY_WARNING
                     }
                 ];
                 if ($this->options['parse-message']) {
                     $parsed = $this->parseMessage($issue['message']);
 
-                    $issue['message'] = $parsed['message'];
+                    $issue['message'] = $parsed['message'] ?? $issue['message'];
                     $issue['help'] = $parsed['help'] ?? null;
                     $issue['ref'] = $parsed['ref'] ?? null;
                 }
@@ -141,14 +138,6 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
         return "Php Code Sniffer JSON representation";
     }
 
-    public static function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL): array
-    {
-        return [
-            ...parent::getOptionsDefinition($returnType),
-            ...self::getJsonOptions($returnType),
-            ...self::newOption('parse-message', InputOption::VALUE_NEGATABLE, 'try (or don\'t try --no-show-ref) to parse the message for help and ref field', true, $returnType)
-            ];
-    }
 
     public static function supports(): array
     {
@@ -156,14 +145,15 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
             self::FEATURE_PARSABLE_MESSAGE,
             self::FEATURE_ISSUE_COLUMN,
             self::FEATURE_ISSUE_LINE,
-            self::FEATURE_PRESERVE_SEVERITY
+            self::FEATURE_ISSUE_CODE
         ];
     }
 
     public static function supportsExtra(): array
     {
         return [
-            self::FEATURE_ISSUE_CODE,
+            self::FEATURE_ISSUE_HELP,
+            self::FEATURE_ISSUE_REF
         ];
     }
 }

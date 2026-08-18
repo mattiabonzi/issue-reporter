@@ -14,7 +14,7 @@ use Tuchsoft\IssueReporter\Report;
  * with a variety of issues. This ensures that format tests can be
  * run against a consistent and comprehensive data set.
  */
-abstract class AbstractTestFormat extends TestCase
+abstract class AbstractFormatTest extends TestCase
 {
     protected FormatInterface $formatter;
 
@@ -22,7 +22,7 @@ abstract class AbstractTestFormat extends TestCase
         $desc = $this->formatter->getDesc();
 
         self::assertIsString($desc);
-        self::assertStringContainsString(' ', $desc, "The description must be more then 1 word");
+        self::assertGreaterThanOrEqual(2, explode(' ', $desc), "The description must be more then 1 word");
     }
 
     public function testGetName() {

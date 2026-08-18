@@ -3,7 +3,6 @@
 namespace Tuchsoft\IssueReporter\Format\Base;
 
 use Symfony\Component\Console\Input\InputOption;
-use Tuchsoft\IssueReporter\Report;
 
 trait RichFormatTrait
 {
@@ -34,9 +33,9 @@ trait RichFormatTrait
     {
         if (!$this->areEmojiActive()) return '';
         return match ($severity) {
-            Report::SEVERITY_ERROR =>  "\u{274C}  ",
-            Report::SEVERITY_WARNING => "\u{26A0}\u{FE0F} ",
-            Report::SEVERITY_TIP => "\u{1F4A1} "
+            Issue::SEVERITY_ERROR =>  "\u{274C}  ",
+            Issue::SEVERITY_WARNING => "\u{26A0}\u{FE0F} ",
+            Issue::SEVERITY_TIP => "\u{1F4A1} "
         };
     }
 

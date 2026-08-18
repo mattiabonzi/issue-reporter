@@ -81,4 +81,9 @@ class NullInput implements InputInterface {
     {
         return false;
     }
+
+    public function __toString(): string
+    {
+        return false;
+    }
 }

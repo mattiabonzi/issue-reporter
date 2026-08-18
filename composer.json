@@ -7,7 +7,7 @@
         "psr-4": {
             "Tuchsoft\\IssueReporter\\": "src/",
             "Tuchsoft\\IssueReporter\\Format\\": "src/Format",
-            "Tuchsoft\\IssueReporter\\Transformer": "src/Transformer"
+            "Tuchsoft\\IssueReporter\\Transformer\\": "src/Transformer"
         }
     },
     "autoload-dev": {
@@ -28,10 +28,14 @@
         "davidbadura/markdown-builder": "^1.1",
         "erusev/parsedown": "^1",
         "riimu/kit-pathjoin": "^1.2",
-        "mustache/mustache": "^2 | ^3"
-
+        "mustache/mustache": "^2 | ^3",
+      "ext-simplexml": "*",
+      "ext-libxml": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "^12.3"
+        "phpunit/phpunit": "^12.3",
+        "richenzi/pairwise": "dev-master"
     }
+
+
 }

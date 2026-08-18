@@ -26,6 +26,11 @@ class Raw extends AbstractFormat implements ParsableFormatInterface
         return Report::fromJson($data);
     }
 
+    public static function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL): array
+    {
+        return static::getJsonOptions($returnType);
+    }
+
     static function getDesc(): string
     {
         return 'Complete JSON representation';

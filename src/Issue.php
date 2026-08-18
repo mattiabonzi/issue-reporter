@@ -2,6 +2,7 @@
 
 namespace Tuchsoft\IssueReporter;
 
+use DateTime;
 use Exception;
 
 class Issue implements \JsonSerializable
@@ -13,9 +14,7 @@ class Issue implements \JsonSerializable
     public const SEVERITY_ERROR_STRING = 'ERROR';
     public const SEVERITY_WARNING_STRING = 'WARNING';
     public const SEVERITY_TIP_STRING = 'TIP';
-
-
-
+    public const SEVERITY_DEFAULT = self::SEVERITY_WARNING;
     public const UNKNOW_CODE = 'unknown';
     /**
      * @var string The issue code.
@@ -65,6 +64,11 @@ class Issue implements \JsonSerializable
      * @var array Additional data for the issue.
      */
     private array $extra = [];
+
+    /**
+     * @var int Unix timestamp in millisecond when the Issue was first found (or reported)
+     */
+    private int $time;
     
 
     /**
@@ -76,7 +80,17 @@ class Issue implements \JsonSerializable
      * @param string|null $path The file path where the issue was found (relative to plugin root).
      * @param int|null $line The line number where the issue was found.
      */
-    public function __construct(string $code, int $severity, string $message, ?string $path = null, ?int $line = 0, ?int $col = 0, ?string $ref = '', ?string $help = '')
+    public function __construct(
+        string $code,
+        int $severity,
+        string $message,
+        ?string $path = null,
+        ?int $line = 0,
+        ?int $col = 0,
+        ?string $ref = '',
+        ?string $help = '',
+        ?int $time = null,
+    )
     {
         $this->code = $code;
         $this->severity = $severity;
@@ -86,6 +100,7 @@ class Issue implements \JsonSerializable
         $this->column = $col ?? 0;
         $this->ref = $ref ?? '';
         $this->help = $help ?? '';
+        $this->time = $time ?? 0;
     }
 
     /**
@@ -119,16 +134,12 @@ class Issue implements \JsonSerializable
 
         // Now, loop through the remaining data and assign to existing properties.
         foreach ($data as $key => $value) {
-            if (property_exists($issue, $key)) {
+            if ($value !== null && property_exists($issue, $key)) {
                 // Use a dedicated setter if one exists, otherwise set directly.
                 $setterMethod = 'set' . ucfirst($key);
                 if (method_exists($issue, $setterMethod)) {
                     // Call the setter to use its validation logic.
                     $issue->$setterMethod($value);
-                } else {
-                    // Direct assignment for properties without a specific setter.
-                    // Note: This bypasses encapsulation and is less safe.
-                    $issue->$key = $value;
                 }
             }
         }
@@ -411,13 +422,20 @@ class Issue implements \JsonSerializable
             'severity' => $this->severity,
             'message' => $this->message,
             'path' => $this->path,
+            'relativePath' => $this->relativePath,
             'line' => $this->line,
+            'column' => $this->column,
             'ref' => $this->ref,
             'help' => $this->help,
-            'extra' => $this->extra
+            'extra' => $this->extra,
         ];
     }
 
+    /**
+     * Return the relative path form the report basePath
+     * with './' prefix, and '/' if directory
+     * @return string relative path form the report basePath
+     */
     public function getRelativePath(): string
     {
         return $this->relativePath;
@@ -427,6 +445,18 @@ class Issue implements \JsonSerializable
     {
         $this->relativePath = $relativePath;
     }
+
+    public function getTime(): int
+    {
+        return $this->time;
+    }
+
+    public function setTime(int $time): void
+    {
+        $this->time = $time;
+    }
+
+
 
 
 

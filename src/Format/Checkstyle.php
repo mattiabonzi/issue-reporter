@@ -6,6 +6,7 @@ use DOMDocument;
 use DOMException;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
+use Tuchsoft\IssueReporter\Format\Base\ParsableMessageFormatTrait;
 use Tuchsoft\IssueReporter\Format\Base\XmlFormatTrait;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
@@ -14,11 +15,15 @@ use Tuchsoft\IssueReporter\Utils\Path;
 /**
  * An implementation of a report format that serializes and deserializes
  * a Report object to and from the Checkstyle XML format.
+ *
+ * This format is widely used by static analysis tools and can be integrated
+ * with various CI/CD systems and IDEs.
  */
 class Checkstyle extends AbstractFormat implements ParsableFormatInterface
 {
 
     use XmlFormatTrait;
+    use ParsableMessageFormatTrait;
 
     /**
      * Generates a Checkstyle XML string from a Report object.
@@ -48,79 +53,72 @@ class Checkstyle extends AbstractFormat implements ParsableFormatInterface
                 $errorElement = $dom->createElement('error');
                 $errorElement->setAttribute('line', (string)$issue->getLine());
                 $errorElement->setAttribute('column', (string)$issue->getColumn());
-
-                $severityString = match ($issue->getSeverity()) {
-                    Report::SEVERITY_ERROR => 'error',
-                    Report::SEVERITY_WARNING, Report::SEVERITY_TIP => 'warning',
-                    default => 'warning',
-                };
-                $errorElement->setAttribute('severity', $severityString);
-                $errorElement->setAttribute('message', $issue->getMessage());
+                $errorElement->setAttribute('severity', $this->getSeverity($issue->getSeverity()));
+                $errorElement->setAttribute('message', $this->getParsableMessage($issue));
                 $errorElement->setAttribute('source', $issue->getCode());
-
                 $fileElement->appendChild($errorElement);
             }
         }
 
-        return $this->saveXML($dom);
+        return $this->xmlEncode($dom);
     }
 
     /**
-     * Parses a Checkstyle XML string and returns a Report object.
+     * Parses a Checkstyle XML string into a Report object.
      *
-     * @param string $input The XML string to parse.
-     * @param string $name The name for the new Report object.
+     * @param string      $input The Checkstyle XML string to parse.
+     * @param string|null $name  An optional name for the new Report object. If not provided,
+     *                           a default name will be generated.
      * @return Report The parsed Report object.
-     * @throws \InvalidArgumentException If the XML is invalid or the structure is incorrect.
+     * @throws \InvalidArgumentException If the XML input is empty, malformed, or not a valid Checkstyle report.
      */
     public function parse(string $input, ?string $name = null): Report
     {
         if (!$name) {
             $name = static::getDefaultReportName();
         }
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($input);
 
-        if ($xml === false) {
-            $errors = libxml_get_errors();
-            $errorMessage = "Failed to parse XML: ";
-            foreach ($errors as $error) {
-                $errorMessage .= "{$error->message} ";
-            }
-            libxml_clear_errors();
-            throw new \InvalidArgumentException($errorMessage);
+        $xml = $this->xmlDecode($input);
+
+        if ($xml->documentElement->tagName != 'checkstyle') {
+            throw new \InvalidArgumentException('Invalid XML input: root element should be "checkstyle"');
         }
 
         $flatIssues = [];
-        $reportName = $name; // Checkstyle format doesn't have a report name attribute
         $allPath = [];
 
-        foreach ($xml->file as $fileElement) {
-            $path = (string)$fileElement['name'];
+        foreach ($xml->getElementsByTagName('file') as $fileElement) {
+            $path = $fileElement->getAttribute('name');
             $allPath[] = $path;
 
-            foreach ($fileElement->error as $errorElement) {
-                $severityString = (string)$errorElement['severity'];
-                $severity = match ($severityString) {
-                    'error' => Report::SEVERITY_ERROR,
-                    'warning' => Report::SEVERITY_WARNING,
-                    'info' => Report::SEVERITY_TIP,
-                    default => Report::SEVERITY_WARNING,
+            foreach ($fileElement->getElementsByTagName('error') as $errorElement) {
+
+                $severity = match ($errorElement->getAttribute('severity')) {
+                    'error' => Issue::SEVERITY_ERROR,
+                    'warning' => Issue::SEVERITY_WARNING,
+                    'info' => Issue::SEVERITY_TIP,
+                    default => Issue::SEVERITY_DEFAULT,
                 };
 
+                $messageElement = $errorElement->getAttribute('message');
+                $parsed = $this->options['parse-message'] ? $this->parseMessage($messageElement) : [];
+
                 $flatIssues[] = [
-                    'message' => (string)$errorElement['message'],
-                    'line' => (int)$errorElement['line'],
-                    'column' => (int)$errorElement['column'],
+                    'message' => $parsed['message'] ?? $messageElement,
+                    'line' => (int)$errorElement->getAttribute('line') ?? 0,
+                    'column' => (int)$errorElement->getAttribute('column') ?? 0,
                     'path' => $path,
-                    'code' => (string)$errorElement['source'],
-                    'severity' => $severity,
+                    'code' => $errorElement->getAttribute('source') ?? Issue::UNKNOW_CODE,
+                    'severity' => $severity ?? Issue::SEVERITY_WARNING,
+                    'help' => $parsed['help'] ?? '',
+                    'ref' => $parsed['ref'] ?? '',
                 ];
             }
         }
 
+
         $reportData = [
-            'name' => $reportName,
+            'name' => $name,
             'issues' => $flatIssues,
             'subReports' => [],
             'timeStart' => 0,
@@ -132,27 +130,55 @@ class Checkstyle extends AbstractFormat implements ParsableFormatInterface
     }
 
     /**
-     * @return string The description of the format.
+     * {@inheritdoc}
+     */
+    static public function getOptionsDefinition(int $returnType = self::OPTIONS_NORMAL):array {
+        return[
+            ...parent::getOptionsDefinition($returnType),
+            ...static::getXmlOptions($returnType),
+            ...static::getParsableMessageOptions($returnType)
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public static function getDesc(): string
     {
         return "Checkstyle XML representation";
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public static function supports(): array
     {
         return [
-            self::FEATURE_ISSUE_LINE,
-            self::FEATURE_ISSUE_COLUMN,
-            self::FEATURE_PRESERVE_SEVERITY,
-            self::FEATURE_ISSUE_CODE,
-            self::FEATURE_ISSUE_HELP,
-
+            ...self::FEATURE_ISSUE_STANDARD,
+            self::FEATURE_PARSABLE_MESSAGE,
         ];
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public static function supportsExtra(): array
     {
-        return [];
+        return [
+            self::FEATURE_ISSUE_REF,
+            self::FEATURE_ISSUE_HELP
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected static function getSeverityMap(): array
+    {
+        return [
+            Issue::SEVERITY_ERROR => 'error',
+            Issue::SEVERITY_WARNING => 'warning',
+            Issue::SEVERITY_TIP => 'info'
+        ];
     }
 }

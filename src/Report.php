@@ -13,10 +13,7 @@ use Tuchsoft\IssueReporter\Utils\Path;
  */
 class Report implements \JsonSerializable
 {
-    public const SEVERITY_ERROR = 5;
-    public const SEVERITY_WARNING = 3;
-    public const SEVERITY_TIP = 0;
-
+    
     /**
      * @var Issue[] Issues for the current report only.
      */
@@ -52,8 +49,8 @@ class Report implements \JsonSerializable
 
     public function getTotalTime(): ?float {
         if ($this->totalTime) return $this->totalTime;
-        if (!$this->timeStart) return null;
-        return round(($this->timeEnd - $this->timeStart) * 1000, 0);
+        if (!$this->timeStart) return 0;
+        return round(($this->getTimeEnd() - $this->getTimeStart()) * 1000, 0);
     }
 
     /**
@@ -66,7 +63,7 @@ class Report implements \JsonSerializable
      */
     public function tip(string $code, string $message, ?string $path = null, ?int  $line = null, ?int $column = null, ?string $help = null, ?string $ref = null): void
     {
-        $this->issue($code, self::SEVERITY_TIP, $message, $path, $line, $column, $help, $ref);
+        $this->issue($code, Issue::SEVERITY_TIP, $message, $path, $line, $column, $help, $ref);
     }
 
     /**
@@ -79,7 +76,7 @@ class Report implements \JsonSerializable
      */
     public function warning(string $code, string $message, ?string $path = null, ?int  $line = null, ?int $column = null, ?string $help = null, ?string $ref = null): void
     {
-        $this->issue($code, self::SEVERITY_WARNING, $message, $path, $line, $column, $help, $ref);
+        $this->issue($code, Issue::SEVERITY_WARNING, $message, $path, $line, $column, $help, $ref);
     }
 
     /**
@@ -92,7 +89,7 @@ class Report implements \JsonSerializable
      */
     public function error(string $code, string $message, ?string $path = null, ?int  $line = null, ?int $column = null, ?string $help = null, ?string $ref = null): void
     {
-        $this->issue($code, self::SEVERITY_ERROR, $message, $path, $line, $column, $help, $ref);
+        $this->issue($code, Issue::SEVERITY_ERROR, $message, $path, $line, $column, $help, $ref);
     }
 
     /**
@@ -100,7 +97,7 @@ class Report implements \JsonSerializable
      * The issue is stored only in the current report, not in subreports.
      *
      * @param string $code The issue code.
-     * @param int    $severity One of Report::SEVERITY_* constants.
+     * @param int    $severity One of Issue::SEVERITY_* constants.
      * @param string $message The issue message.
      * @param string $path The file path where the issue was found (relative to plugin root).
      * @param int    $line The line number where the issue was found.
@@ -120,6 +117,8 @@ class Report implements \JsonSerializable
 
     public function addIssue(Issue $issue): void
     {
+        $now =  floor(microtime(true) * 1000);
+
         if (!$this->timeStart) {
             throw new \Exception('Report has not been started yet, use Report::start() before adding issues.');
         }
@@ -128,16 +127,23 @@ class Report implements \JsonSerializable
             throw new \Exception('Issue must have a code.');
         }
 
+        //Normalize the path.
         $path = Path::normalize($issue->getPath());
         if ($path == '.') {
             $path = $this->basePath;
         } else if (!str_starts_with($path, DIRECTORY_SEPARATOR) &&
             !preg_match("/^[A-Z]:\/.+$/", $path)) {
-            $path = $this->basePath . DIRECTORY_SEPARATOR . ltrim($path, '/');
+            $path = $this->basePath . (str_ends_with($this->basePath, DIRECTORY_SEPARATOR) ? ''  : DIRECTORY_SEPARATOR) . ltrim($path, '/');
         }
         $issue->setPath($path);
         $issue->setRelativePath(Path::stripBasepath($path, $this->basePath));
 
+        //Set the time, if not already.
+        if (!$issue->getTime()) {
+            $issue->setTime($now);
+        }
+
+        //Clean all strings
         foreach(['Message', 'Help', 'Ref', 'Path', 'Code', 'RelativePath'] as $prop) {
             $get = "get$prop";
             $set = "set$prop";
@@ -182,7 +188,7 @@ class Report implements \JsonSerializable
 
         if ($recursive) {
             foreach ($this->subReports as $subReport) {
-                array_push($allIssues, ...$subReport->getIssues());
+                array_push($allIssues, ...$subReport->getIssues(false));
             }
         }
 
@@ -289,6 +295,9 @@ class Report implements \JsonSerializable
         // Recursively create subreports
         if (isset($json['subReports'])) {
             foreach ($json['subReports'] as $subReportData) {
+                if (!isset($subReportData['basePath'])) {
+                    $subReportData['basePath'] = Path::normalize($json['basePath']);
+                }
                 $subReport = self::fromJson($subReportData);
                 $report->subReports[$subReport->name] = $subReport;
             }
@@ -318,8 +327,8 @@ class Report implements \JsonSerializable
 
         return [
             'name' => $this->name,
-            'basePath' => $this->basePath,
-            'issues' => $this->organizeByFile($this->issues),
+            'basePath' => Path::normalize($this->basePath),
+            'issues' => $this->getIssues(recursive: false),
             'subReports' => $serializedSubReports,
             'timeStart' => $this->timeStart,
             'timeEnd' => $this->timeEnd,
@@ -345,7 +354,7 @@ class Report implements \JsonSerializable
 
     public function getTimeEnd(): ?float
     {
-        return $this->timeEnd;
+        return round($this->timeEnd, 4);
     }
 
     public function setTimeEnd(?float $timeEnd): void
@@ -355,7 +364,7 @@ class Report implements \JsonSerializable
 
     public function getTimeStart(): ?float
     {
-        return $this->timeStart;
+        return round($this->timeStart, 4);
     }
 
     public function setTimeStart(?float $timeStart): void
@@ -387,11 +396,11 @@ class Report implements \JsonSerializable
 
         // Add issues and file paths from the current report
         foreach ($this->issues as $issue) {
-            if ($issue->getSeverity() === self::SEVERITY_ERROR) {
+            if ($issue->getSeverity() === Issue::SEVERITY_ERROR) {
                 $totalErrors++;
-            } elseif ($issue->getSeverity() === self::SEVERITY_WARNING) {
+            } elseif ($issue->getSeverity() === Issue::SEVERITY_WARNING) {
                 $totalWarnings++;
-            } elseif ($issue->getSeverity() === self::SEVERITY_TIP) {
+            } elseif ($issue->getSeverity() === Issue::SEVERITY_TIP) {
                 $totalTips++;
             }
             $allFilePaths[] = $issue->getPath();
@@ -441,7 +450,7 @@ class Report implements \JsonSerializable
 
     public function setTotalTime(?float $totalTime): void
     {
-        $this->totalTime = $totalTime;
+        $this->totalTime = round($totalTime, 4);
     }
 
     public function getBasePath(): string

@@ -3,7 +3,6 @@
 namespace Tuchsoft\IssueReporter\Format\Base;
 
 use Parsedown;
-use Tuchsoft\IssueReporter\Report;
 
 trait HtmlFormatTrait
 {
@@ -17,9 +16,9 @@ trait HtmlFormatTrait
     protected function getSeverityIcon(int $severity): string
     {
         return $this->getSeverityEmoji($severity) .  match ($severity) {
-            Report::SEVERITY_ERROR => '<span style="color:red;">ERROR</span>',
-            Report::SEVERITY_WARNING => '<span style="color:orange;">WARNING</span>',
-            Report::SEVERITY_TIP => '<span style="color:yellowgreen;">TIP</span>',
+            Issue::SEVERITY_ERROR => '<span style="color:red;">ERROR</span>',
+            Issue::SEVERITY_WARNING => '<span style="color:orange;">WARNING</span>',
+            Issue::SEVERITY_TIP => '<span style="color:yellowgreen;">TIP</span>',
         };
     }
 

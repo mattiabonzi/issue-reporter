@@ -48,9 +48,9 @@ class Lsp extends AbstractFormat implements ParsableFormatInterface
             foreach ($issues as $issue) {
                 // Map internal severity to LSP's numeric severity
                 $lspSeverity = match ($issue->getSeverity()) {
-                    Report::SEVERITY_ERROR => self::LSP_SEVERITY_ERROR,
-                    Report::SEVERITY_WARNING => self::LSP_SEVERITY_WARNING,
-                    Report::SEVERITY_TIP => self::LSP_SEVERITY_INFORMATION,
+                    Issue::SEVERITY_ERROR => self::LSP_SEVERITY_ERROR,
+                    Issue::SEVERITY_WARNING => self::LSP_SEVERITY_WARNING,
+                    Issue::SEVERITY_TIP => self::LSP_SEVERITY_INFORMATION,
                     default => self::LSP_SEVERITY_HINT,
                 };
 
@@ -139,12 +139,12 @@ class Lsp extends AbstractFormat implements ParsableFormatInterface
             foreach ($params['diagnostics'] as $diagnostic) {
                 // Map LSP numeric severity back to internal severity
                 $severityMap = [
-                    self::LSP_SEVERITY_ERROR => Report::SEVERITY_ERROR,
-                    self::LSP_SEVERITY_WARNING => Report::SEVERITY_WARNING,
-                    self::LSP_SEVERITY_INFORMATION => Report::SEVERITY_TIP,
-                    self::LSP_SEVERITY_HINT => Report::SEVERITY_TIP, // Map hint to tip
+                    self::LSP_SEVERITY_ERROR => Issue::SEVERITY_ERROR,
+                    self::LSP_SEVERITY_WARNING => Issue::SEVERITY_WARNING,
+                    self::LSP_SEVERITY_INFORMATION => Issue::SEVERITY_TIP,
+                    self::LSP_SEVERITY_HINT => Issue::SEVERITY_TIP, // Map hint to tip
                 ];
-                $issueSeverity = $severityMap[$diagnostic['severity'] ?? 2] ?? Report::SEVERITY_WARNING;
+                $issueSeverity = $severityMap[$diagnostic['severity'] ?? 2] ?? Issue::SEVERITY_WARNING;
 
                 $range = $diagnostic['range'] ?? ['start' => ['line' => 0, 'character' => 0]];
 

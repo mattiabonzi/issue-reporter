@@ -30,7 +30,7 @@ trait InfoFormatTrait
             $headers = array_filter([
                 'Line',
                 ' ',
-                $this->options['show-code'] ? 'Code' : null,
+                'Code',
                 'Message',
                 $this->options['show-help'] ? 'Help' : null,
                 $this->options['show-ref'] ? 'Ref' : null,
@@ -43,7 +43,7 @@ trait InfoFormatTrait
                 $rows[] = array_filter([
                     $issue->getLine() . ($issue->getColumn() ? ":{$issue->getColumn()}" : ''),
                     $this->getSeverityIcon($issue->getSeverity()),
-                    $this->options['show-code'] ? $issue->getCode() : null,
+                    $issue->getCode(),
                     $issue->getMessage(),
                     $this->options['show-help'] ? $issue->getHelp() : null,
                     $this->options['show-ref'] ? $issue->getRef() : null

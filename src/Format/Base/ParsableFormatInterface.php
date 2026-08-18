@@ -78,10 +78,44 @@ interface ParsableFormatInterface extends FormatInterface {
      */
     const FEATURE_ISSUE_CODE = 'includes-the-issues-code';
 
+
+    /**
+     * @var string Constant indicating the issue's message is stored and can be parsed.
+     */
+    const FEATURE_ISSUE_MESSAGE = 'includes-the-issues-message';
+
+    /**
+     * @var string[] An array of standrad issue feature.
+     * equivalent to: FEATURE_ISSUE_LINE, FEATURE_ISSUE_COLUMN, FEATURE_ISSUE_CODE, FEATURE_PRESERVE_SEVERITY, FEATURE_ISSUE_MESSAGE
+     */
+    const FEATURE_ISSUE_STANDARD = [
+        self::FEATURE_ISSUE_LINE,
+        self::FEATURE_ISSUE_COLUMN,
+        self::FEATURE_ISSUE_CODE,
+        self::FEATURE_PRESERVE_SEVERITY,
+        self::FEATURE_ISSUE_MESSAGE
+    ];
+    
+
+
     /**
      * @var string[] An array of all feature constants, representing a fully-featured format.
      */
-    const FEATURE_ALL = ["supports-all-features"];
+    const FEATURE_ALL = [
+        self::FEATURE_PARSABLE_MESSAGE,
+        self::FEATURE_PRESERVE_SEVERITY,
+        self::FEATURE_REPORT_NAME,
+        self::FEATURE_REPORT_BASEPATH,
+        self::FEATURE_REPORT_TOTAL_TIME,
+        self::FEATURE_REPORT_TIME_END,
+        self::FEATURE_REPORT_TIME_START,
+        self::FEATURE_ISSUE_LINE,
+        self::FEATURE_ISSUE_COLUMN,
+        self::FEATURE_ISSUE_HELP,
+        self::FEATURE_ISSUE_REF,
+        self::FEATURE_ISSUE_EXTRA,
+        self::FEATURE_ISSUE_CODE,
+    ];
 
     /**
      * Parses a string representation of a report into a Report object.

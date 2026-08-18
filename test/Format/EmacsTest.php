@@ -3,23 +3,41 @@
 namespace Tuchsoft\IssueReporter\Test\Format;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tuchsoft\IssueReporter\Format\Base\FormatInterface;
 use Tuchsoft\IssueReporter\Format\Emacs;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
-use Tuchsoft\IssueReporter\Test\Base\AbstractTestFormat;
-use Tuchsoft\IssueReporter\Test\Base\ReportProvider;
+use Tuchsoft\IssueReporter\Test\Base\AbstractParsableFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\Provider\ReportProvider;
 
+/**
+ * Tests for the Emacs format.
+ *
+ * This class contains unit tests for both generating and parsing Emacs-style reports.
+ */
 #[CoversClass(\Tuchsoft\IssueReporter\Format\Emacs::class)]
 #[Group('Emacs')]
-class EmacsTest extends AbstractTestFormat
+class EmacsTest extends AbstractParsableFormatTest
 {
     use ReportProvider;
 
-    /** @var Emacs $formatter */
+    /**
+     * The formatter instance used for testing.
+     * @var Emacs $formatter
+     */
     protected FormatInterface $formatter;
 
+    /**
+     * The formatter class to test.
+     * @var class-string<Emacs>
+     */
+    protected static string $formatterClass = Emacs::class;
+
+    /**
+     * Sets up the test environment before each test.
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,163 +45,220 @@ class EmacsTest extends AbstractTestFormat
     }
 
     /**
-     * Verifies that the generate method produces a correct Emacs-style string.
+     * Data provider for testing the generate method with various options.
+     *
+     * @return array<string, array{options: array<string, bool>, expectedLines: array<string>}>
      */
-    public function testGenerateProducesCorrectFormat(): void
+    public static function generateProvider(): array
     {
-        $report = $this->createTestReport();
-        $generatedOutput = $this->formatter->generate($report);
 
-        $lines = explode("\n", $generatedOutput);
-        $originalIssues = $report->getIssues(false, true); // Get flat list of all issues
+        $data = FIXED_TEST_DATA;
+        $keys = array_keys($data);
 
-        $this->assertCount(count($originalIssues), $lines, "The number of output lines should match the number of issues.");
+        $severityData = ['error', 'warning', 'info', 'warning', 'error', 'warning', 'error',];
 
-        // Sort both arrays to ensure a consistent order for comparison, as generate() doesn't guarantee order.
-        usort($originalIssues, fn(Issue $a, Issue $b) => strcmp($a->getPath() . $a->getLine(), $b->getPath() . $b->getLine()));
-        sort($lines);
+        $baseLines = array_map(fn($key) => sprintf(
+            "%s:%d:%d: %s - %s (#%s)",
+            $data[$key]['path'],
+            $data[$key]['line'],
+            $data[$key]['col'],
+            $severityData[$key],
+            $data[$key]['message'],
+            $data[$key]['code']
+        ), $keys);
 
-        foreach ($originalIssues as $index => $issue) {
-            $expectedSeverity = match ($issue->getSeverity()) {
-                Report::SEVERITY_ERROR => 'error',
-                default => 'warning', // WARNING and TIP map to 'warning'
-            };
+        $withHelpOnly = array_map(fn($key) => trim("{$baseLines[$key]}" . ($data[$key]['help'] ? "  ({$data[$key]['help']})" : '')), $keys);
+        $withRefAndHelp = array_map(fn($key) => trim("{$withHelpOnly[$key]}" . ($data[$key]['ref'] ? "  [{$data[$key]['ref']}]" : '')), $keys);
+        $withRefOnly = array_map(fn($key) => trim("{$baseLines[$key]}" . ($data[$key]['ref'] ? "  [{$data[$key]['ref']}]" : '')), $keys);
+        $withNeither = array_values($baseLines);
 
-            $expectedLine = sprintf(
-                "%s:%d:%d: %s - %s (#%s) (%s)",
-                $issue->getPath(),
-                $issue->getLine(),
-                $issue->getColumn(),
-                $expectedSeverity,
-                $issue->getMessage(),
-                $issue->getCode(),
-                $issue->getHelp()
-            );
-
-            $this->assertEquals($expectedLine, $lines[$index]);
-        }
+        return [
+            'Default (show-ref=false, show-help=true)' => [
+                'options' => [], // Default constructor should enable both
+                'expectedLines' => $withHelpOnly,
+            ],
+            'Explicitly enabled (show-ref=true, show-help=true)' => [
+                'options' => ['show-ref' => true, 'show-help' => true],
+                'expectedLines' => $withRefAndHelp,
+            ],
+            'Help only (show-ref=false, show-help=true)' => [
+                'options' => ['show-ref' => false, 'show-help' => true],
+                'expectedLines' => $withHelpOnly,
+            ],
+            'Ref only (show-ref=true, show-help=false)' => [
+                'options' => ['show-ref' => true, 'show-help' => false],
+                'expectedLines' => $withRefOnly,
+            ],
+            'Neither (show-ref=false, show-help=false)' => [
+                'options' => ['show-ref' => false, 'show-help' => false],
+                'expectedLines' => $withNeither,
+            ],
+        ];
     }
 
     /**
-     * Verifies that the parse method correctly constructs a Report object.
+     * Verifies that the generate method produces a correct Emacs-style string based on options.
+     *
+     * @param array<string, bool> $options The options to initialize the formatter with.
+     * @param array<string> $expectedLines The expected lines of output.
      */
-    public function testParseCreatesCorrectReportObject(): void
+    #[DataProvider('generateProvider')]
+    public function testGenerate(array $options, array $expectedLines): void
     {
-        $input = <<<TEXT
-src/File1.php:10:5: error - This is an error. (#Some.Error.Rule)
-src/File1.php:20:15: warning - This is a warning. (#Some.Warning.Rule)
-src/File2.php:30:1: warning - This is a tip. (#Some.Tip.Rule)
-TEXT;
+        $formatter = new Emacs($options);
+        $report = $this->getFixedTestReport();
+        $generatedOutput = $formatter->generate($report);
 
+        // Split into lines and remove any trailing empty lines
+        $actualLines = array_filter(explode("\n", $generatedOutput));
+
+        $this->assertCount(count($expectedLines), $actualLines, "The number of output lines should match the number of expected lines.");
+
+        foreach ($actualLines as $i => $line) {
+            $this->assertEquals($expectedLines[$i], $line);
+        }
+
+
+    }
+
+    /**
+     * Data provider for testing the parse method.
+     *
+     * @return array<string, array{input: string, expectedIssues: array<int, array<string, mixed>>}>
+     */
+    public static function parseProvider(): array
+    {
+        return [
+            'Standard parsing with and without help text' => [
+                'input' => implode("\n", [
+                    'src/File1.php:10:5: error - This is an error. (#Some.Error.Rule)  (Some help text)',
+                    'src/File1.php:20:15: warning - This is a warning. (#Some.Warning.Rule)',
+                    'src/File2.php:30:1: warning - This is a tip. (#Some.Tip.Rule)  ()',
+                ]),
+                'expectedIssues' => [
+                    [
+                        'path' => 'src/File1.php',
+                        'line' => 10,
+                        'column' => 5,
+                        'severity' => Issue::SEVERITY_ERROR,
+                        'message' => 'This is an error.',
+                        'code' => 'Some.Error.Rule',
+                        'help' => 'Some help text',
+                    ],
+                    [
+                        'path' => 'src/File1.php',
+                        'line' => 20,
+                        'column' => 15,
+                        'severity' => Issue::SEVERITY_WARNING,
+                        'message' => 'This is a warning.',
+                        'code' => 'Some.Warning.Rule',
+                        'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File2.php',
+                        'line' => 30,
+                        'column' => 1,
+                        'severity' => Issue::SEVERITY_WARNING,
+                        'message' => 'This is a tip.',
+                        'code' => 'Some.Tip.Rule',
+                        'help' => '',
+                    ],
+                ],
+            ],
+            'Comprehensive parsing with valid, invalid, and edge-case lines' => [
+                'input' => <<<TEXT
+# This is a report file.
+
+src/File1.php:10:5: error - This is a standard valid error. (#Rule1)  (With help)
+src/File2.php:20:15: warning - This is a standard valid warning. (#Rule2)
+
+This is a completely invalid line that should be ignored.
+
+src/File3.php:30:1: error - Message with malformed code #NoParen)
+src/File4.php:40:1: warning - Message with malformed help (#Code) NoParen)
+src/File5.php:50:not_a_line: error - Invalid line number, should be ignored.
+src/File6.php:60:22: strikgnak - Unknown severity, should get default.  (#Rule3)
+src/File7.php:70:1: error - Message with empty code/help (#)  ()
+src/File8.php:80:1: warning - Message with spaces in code (#a b c)  (help)
+
+// Another comment
+src/File9.php:90:5: error - Another valid error. (#Rule9)  (Help for 9)
+TEXT,
+                'expectedIssues' => [
+                    [
+                        'path' => 'src/File1.php', 'line' => 10, 'column' => 5, 'severity' => Issue::SEVERITY_ERROR,
+                        'message' => 'This is a standard valid error.', 'code' => 'Rule1', 'help' => 'With help',
+                    ],
+                    [
+                        'path' => 'src/File2.php', 'line' => 20, 'column' => 15, 'severity' => Issue::SEVERITY_WARNING,
+                        'message' => 'This is a standard valid warning.', 'code' => 'Rule2', 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File3.php', 'line' => 30, 'column' => 1, 'severity' => Issue::SEVERITY_ERROR,
+                        'message' => 'Message with malformed code #NoParen)', 'code' => Issue::UNKNOW_CODE, 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File4.php', 'line' => 40, 'column' => 1, 'severity' => Issue::SEVERITY_WARNING,
+                        'message' => 'Message with malformed help', 'code' => 'Code', 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File6.php', 'line' => 60, 'column' => 22, 'severity' => Issue::SEVERITY_DEFAULT,
+                        'message' => 'Unknown severity, should get default.', 'code' => 'Rule3', 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File7.php', 'line' => 70, 'column' => 1, 'severity' => Issue::SEVERITY_ERROR,
+                        'message' => 'Message with empty code/help (#)  ()', 'code' => Issue::UNKNOW_CODE, 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File8.php', 'line' => 80, 'column' => 1, 'severity' => Issue::SEVERITY_WARNING,
+                        'message' => 'Message with spaces in code (#a b c)  (help)', 'code' => Issue::UNKNOW_CODE, 'help' => '',
+                    ],
+                    [
+                        'path' => 'src/File9.php', 'line' => 90, 'column' => 5, 'severity' => Issue::SEVERITY_ERROR,
+                        'message' => 'Another valid error.', 'code' => 'Rule9', 'help' => 'Help for 9',
+                    ],
+                ],
+            ],
+            'Parsing empty input' => [
+                'input' => '',
+                'expectedIssues' => [],
+            ],
+        ];
+    }
+
+    /**
+     * Verifies that the parse method correctly constructs a Report object from various inputs.
+     *
+     * @param string $input The Emacs-style string to parse.
+     * @param array<int, array<string, mixed>> $expectedIssues The expected issue data after parsing.
+     */
+    #[DataProvider('parseProvider')]
+    public function testParse(string $input, array $expectedIssues): void
+    {
         $report = $this->formatter->parse($input, 'Parsed Emacs Report');
         $this->assertInstanceOf(Report::class, $report);
         $this->assertEquals('Parsed Emacs Report', $report->getName());
 
         $issues = $report->getIssues(false, false);
-        $this->assertCount(3, $issues);
+        $this->assertCount(count($expectedIssues), $issues, "The number of parsed issues should match the expected count.");
 
-        // Sort issues by line number for predictable testing
-        usort($issues, fn(Issue $a, Issue $b) => $a->getLine() <=> $b->getLine());
+        if (empty($expectedIssues)) {
+            return; // Nothing more to check
+        }
 
-        // Check the error issue
-        $errorIssue = $issues[0];
-        $this->assertEquals('src/File1.php', $errorIssue->getPath());
-        $this->assertEquals(10, $errorIssue->getLine());
-        $this->assertEquals(5, $errorIssue->getColumn());
-        $this->assertEquals('This is an error.', $errorIssue->getMessage());
-        $this->assertEquals('Some.Error.Rule', $errorIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_ERROR, $errorIssue->getSeverity());
+        // Sort both actual and expected issues for predictable comparison
+        usort($issues, fn(Issue $a, Issue $b) => ($a->getPath() . $a->getLine()) <=> ($b->getPath() . $b->getLine()));
+        usort($expectedIssues, fn(array $a, array $b) => ($a['path'] . $a['line']) <=> ($b['path'] . $b['line']));
 
-        // Check the warning issue
-        $warningIssue = $issues[1];
-        $this->assertEquals('src/File1.php', $warningIssue->getPath());
-        $this->assertEquals(20, $warningIssue->getLine());
-        $this->assertEquals(15, $warningIssue->getColumn());
-        $this->assertEquals('This is a warning.', $warningIssue->getMessage());
-        $this->assertEquals('Some.Warning.Rule', $warningIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_WARNING, $warningIssue->getSeverity());
-
-        // Check the tip (parsed as warning) issue
-        $tipIssue = $issues[2];
-        $this->assertEquals('src/File2.php', $tipIssue->getPath());
-        $this->assertEquals(30, $tipIssue->getLine());
-        $this->assertEquals(1, $tipIssue->getColumn());
-        $this->assertEquals('This is a tip.', $tipIssue->getMessage());
-        $this->assertEquals('Some.Tip.Rule', $tipIssue->getCode());
-        $this->assertEquals(Report::SEVERITY_WARNING, $tipIssue->getSeverity());
-    }
-
-    /**
-     * Verifies that the parse method correctly handles empty lines and invalid lines.
-     */
-    public function testParseHandlesEmptyAndInvalidLines(): void
-    {
-        $input = <<<TEXT
-src/File1.php:10:5: error - This is a valid line. (#Valid.Rule)
-
-This is an invalid line that should be ignored.
-src/File2.php:20:15: warning - Another valid line. (#Another.Rule)
-
-TEXT;
-
-        $report = $this->formatter->parse($input);
-        $issues = $report->getIssues(false, false);
-
-        $this->assertCount(2, $issues, "Should only parse the two valid lines and ignore others.");
-
-        $this->assertEquals('src/File1.php', $issues[0]->getPath());
-        $this->assertEquals('src/File2.php', $issues[1]->getPath());
-    }
-
-    /**
-     * Tests the full cycle of generating a report and then parsing it back.
-     * This test highlights inconsistencies between the generate and parse methods.
-     */
-    public function testGenerateAndParseRoundTrip(): void
-    {
-        // 1. Create an initial report
-        $originalReport = $this->createTestReport();
-
-        // 2. Generate the text string from it and parse it back
-        $textOutput = $this->formatter->generate($originalReport);
-        $parsedReport = $this->formatter->parse($textOutput);
-
-        // 3. Compare the meaningful data of the reports
-        self::assertEqualReport(
-            $originalReport,
-            $parsedReport,
-            name: $this->formatter->getDefaultReportName(),
-            warnings: $originalReport->getTotalWarnings()+$originalReport->getTotalTips(),
-            tips: 0
-        );
-
-
-
-
-        // Sort issues to ensure consistent order for comparison
-        $originalIssues = $originalReport->getIssues(false);
-        $parsedIssues = $parsedReport->getIssues(false);
-        $sortFunc = fn(Issue $a, Issue $b) => strcmp($a->getPath() . $a->getLine(), $b->getPath() . $b->getLine());
-        usort($originalIssues, $sortFunc);
-        usort($parsedIssues, $sortFunc);
-
-        foreach ($originalIssues as $i => $originalIssue) {
-            $parsedIssue = $parsedIssues[$i];
-
-            $this->assertEquals($originalIssue->getPath(), $parsedIssue->getPath());
-            $this->assertEquals($originalIssue->getLine(), $parsedIssue->getLine());
-            $this->assertEquals($originalIssue->getColumn(), $parsedIssue->getColumn());
-            $this->assertEquals($originalIssue->getCode(), $parsedIssue->getCode());
-            $this->assertEquals($originalIssue->getMessage(), $parsedIssue->getMessage());
-
-            // KNOWN INCONSISTENCY: `generate` maps TIP to 'warning'.
-            // `parse` maps 'warning' back to SEVERITY_WARNING.
-            // So, an original TIP becomes a WARNING after the round trip.
-            $expectedSeverity = ($originalIssue->getSeverity() === Report::SEVERITY_TIP)
-                ? Report::SEVERITY_WARNING
-                : $originalIssue->getSeverity();
-
-            $this->assertEquals($expectedSeverity, $parsedIssue->getSeverity());
+        foreach ($expectedIssues as $index => $expected) {
+            $actualIssue = $issues[$index];
+            $this->assertEquals($expected['path'], $actualIssue->getPath(), "Path mismatch for issue at index $index.");
+            $this->assertEquals($expected['line'], $actualIssue->getLine(), "Line mismatch for issue at index $index.");
+            $this->assertEquals($expected['column'], $actualIssue->getColumn(), "Column mismatch for issue at index $index.");
+            $this->assertEquals($expected['severity'], $actualIssue->getSeverity(), "Severity mismatch for issue at index $index.");
+            $this->assertEquals($expected['message'], $actualIssue->getMessage(), "Message mismatch for issue at index $index.");
+            $this->assertEquals($expected['code'], $actualIssue->getCode(), "Code mismatch for issue at index $index.");
+            $this->assertEquals($expected['help'], $actualIssue->getHelp(), "Help mismatch for issue at index $index.");
         }
     }
 }

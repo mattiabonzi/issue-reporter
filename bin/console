@@ -1,0 +1,15 @@
+#!/usr/bin/env php
+<?php
+
+use Symfony\Component\Console\Application;
+use Tuchsoft\IssueReporter\Command\ListFormat;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+$application = new Application('Issue report CLI', '0.0.1');
+
+$application->add(new ListFormat());
+$application->setDefaultCommand(ListFormat::$defaultName, true);
+
+$application->run();
+
