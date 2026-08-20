@@ -2,6 +2,8 @@
 
 namespace Tuchsoft\IssueReporter\Format\Base;
 
+use Tuchsoft\IssueReporter\Issue;
+
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;

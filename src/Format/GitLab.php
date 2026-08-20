@@ -124,7 +124,7 @@ class GitLab extends AbstractFormat implements ParsableFormatInterface
                 'severity' => $this->parseSeverity($gitlabIssue['severity']),
                 'ref' => $parsed['ref'] ?? null,
                 'help' => $parsed['help'] ?? null,
-                'column' => (int)$parsed['col'] ?? null,
+                'column' => (int)($parsed['col'] ?? 0),
             ];
         }
 

@@ -18,7 +18,7 @@ use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
 
 class ListFormat  extends Command {
 
-    public static string $defaultName = 'list-format';
+    protected static $defaultName = 'list-format';
 
     protected function configure(): void
     {

@@ -62,8 +62,9 @@ class PhpCsTest extends  AbstractJsonFormatTest
         }
 
         // Check details for File1.php
-        $file1Data = $data['files'][$report->getBasePath().'/src/File1.php'];
-        $issuesInFile1 = $report->getIssues()[$report->getBasePath().'/src/File1.php'];
+        $filePath = rtrim($report->getBasePath(), '/') . '/src/File1.php';
+        $file1Data = $data['files'][$filePath];
+        $issuesInFile1 = $report->getIssues()[$filePath];
         $this->assertCount(count($issuesInFile1), $file1Data['messages']);
 
         // Find the original error issue to compare against

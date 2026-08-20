@@ -5,7 +5,7 @@ namespace Tuchsoft\IssueReporter;
 use Composer\Autoload\ClassLoader;
 use ReflectionClass;
 use Tuchsoft\IssueReporter\Format\Base\FormatInterface;
-use Tuchsoft\IssueReporter\Format\Base\LoadableInterface;
+use Tuchsoft\IssueReporter\Base\LoadableInterface;
 use Tuchsoft\IssueReporter\Utils\Path;
 
 class Factory {
@@ -13,7 +13,7 @@ class Factory {
     public const FORMAT = 'format';
     public const TRANSFORMER = 'transformer';
     protected static array $format = [];
-    protected static array $trasfomrer = [];
+    protected static array $transformer = [];
     protected static ?ClassLoader $autoloader = null;
     protected static bool $buildInLoaded = false;
 
@@ -112,6 +112,11 @@ class Factory {
         }
     }
 
+    /**
+     * @param string $type
+     * @param string $name
+     * @param array $options
+     */
     public static function create(string $type, string $name, array $options): ?LoadableInterface {
         self::registerBuiltIn();
         if (!isset(self::${$type}[$name])) {

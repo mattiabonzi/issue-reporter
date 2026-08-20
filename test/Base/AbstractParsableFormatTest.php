@@ -4,11 +4,12 @@ namespace Tuchsoft\IssueReporter\Test\Base;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Richenzi\Pairwise\Pairwise;
 use Tuchsoft\IssueReporter\Format\Base\AbstractFormat;
 use Tuchsoft\IssueReporter\Format\Base\ParsableFormatInterface;
 use Tuchsoft\IssueReporter\Issue;
 use Tuchsoft\IssueReporter\Report;
+use Tuchsoft\IssueReporter\Test\Base\AbstractParsableFormatTest;
+use Tuchsoft\IssueReporter\Test\Base\Provider\JsonOptionsProvider;
 use Tuchsoft\IssueReporter\Test\Base\Provider\OptionsMatrixProvider;
 use Tuchsoft\IssueReporter\Test\Base\Provider\ReportProvider;
 
@@ -26,6 +27,27 @@ abstract class AbstractParsableFormatTest extends AbstractFormatTest
     protected static string $formatterClass;
 
     /**
+     * Computes the Cartesian product of an associative array of dimensions.
+     *
+     * @param array<string, array<int, mixed>> $dimensions
+     * @return array<int, array<string, mixed>>
+     */
+    private static function cartesianProduct(array $dimensions): array
+    {
+        $result = [[]];
+        foreach ($dimensions as $key => $values) {
+            $newResult = [];
+            foreach ($result as $combination) {
+                foreach ($values as $value) {
+                    $newResult[] = array_merge($combination, [$key => $value]);
+                }
+            }
+            $result = $newResult;
+        }
+        return $result;
+    }
+
+    /**
      * Combines data from all necessary providers into a single test matrix.
      *
      * @return array
@@ -34,9 +56,7 @@ abstract class AbstractParsableFormatTest extends AbstractFormatTest
     {
         $options = self::optionsMatrixProvider(static::$formatterClass);
 
-        $matrix =  self::reportMatrixProvider();
-        $matrixKey = array_keys($matrix);
-        $matrix = array_map(fn ($e) => array_combine($matrixKey, $e),Pairwise::fromData($matrix)->generate());
+        $matrix = self::cartesianProduct(self::reportMatrixProvider());
 
         $combinations = [[]];
 
@@ -89,7 +109,7 @@ abstract class AbstractParsableFormatTest extends AbstractFormatTest
         $parsedReport =  $this->formatter->parse($generatedString, $originalReport->getName());
 
         $supports = $this->formatter::supports();
-        if ($options['parse-message']) {
+        if ($options['parse-message'] ?? false) {
             $supports = array_merge($supports, $this->formatter::supportsExtra());
         }
         $this->assertFeatures($originalReport, $parsedReport,  $supports, $options);

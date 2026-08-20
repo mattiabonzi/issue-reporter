@@ -2,6 +2,8 @@
 
 namespace Tuchsoft\IssueReporter\Format\Base;
 
+use Tuchsoft\IssueReporter\Issue;
+
 use Parsedown;
 
 trait HtmlFormatTrait

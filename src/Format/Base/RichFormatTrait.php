@@ -3,6 +3,7 @@
 namespace Tuchsoft\IssueReporter\Format\Base;
 
 use Symfony\Component\Console\Input\InputOption;
+use Tuchsoft\IssueReporter\Issue;
 
 trait RichFormatTrait
 {

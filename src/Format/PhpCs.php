@@ -49,13 +49,16 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                     'type'     => $messageType,
                     'line'     => $issue->getLine(),
                     'column'   => $issue->getColumn(),
+                    'source'   => $issue->getCode(),
                 ];
 
-                // 2. Correctly add 'source' to the individual message array.
-                $messageData['source'] = $issue->getCode();
-
-                // 3. Correctly append help and ref info from the $issue object.
-                $messageData['message'] = $this->getParsableMessage($issue);
+                // 2. Optionally append help and ref info from the $issue object.
+                if ($this->options['show-help'] && $issue->getHelp()) {
+                    $messageData['message'] .= " ({$issue->getHelp()})";
+                }
+                if ($this->options['show-ref'] && $issue->getRef()) {
+                    $messageData['message'] .= " [{$issue->getRef()}]";
+                }
 
                 $messages[] = $messageData;
 
@@ -108,7 +111,7 @@ class PhpCs extends AbstractFormat implements ParsableFormatInterface
                         'WARNING' => Issue::SEVERITY_WARNING
                     }
                 ];
-                if ($this->options['parse-message']) {
+                if ($this->options['parse-message'] ?? false) {
                     $parsed = $this->parseMessage($issue['message']);
 
                     $issue['message'] = $parsed['message'] ?? $issue['message'];

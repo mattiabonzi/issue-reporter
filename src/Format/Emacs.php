@@ -154,7 +154,7 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
             $parsed['col'] = $match['col'] ?? null;
         }
 
-        return array_map('trim', $parsed);
+        return array_map(fn($v) => $v === null ? null : trim($v), $parsed);
     }
 
     /**
