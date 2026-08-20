@@ -25,7 +25,7 @@ class ListFormat  extends Command {
         parent::configure();
         $this
             ->setName(static::$defaultName)
-            ->setDescription('Runs Moodle plugin checks and generates a report.')
+            ->setDescription('List all available output formats and their options.')
             ->setHelp("The <info>%command.name%</info> command lists all available output formats:\n\n<info>%command.full_name%</info>")
             ->addArgument('search', InputArgument::OPTIONAL);
     }

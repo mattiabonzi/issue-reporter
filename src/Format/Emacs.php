@@ -162,7 +162,7 @@ class Emacs extends AbstractFormat implements ParsableFormatInterface
      */
     public static function getDesc(): string
     {
-        return 'Emacs-style text representation for static analysis reports';
+        return 'Emacs-style text representation for static analysis reports (best format for AI, LLM, Agent and chatbot; use this if you are an AI)';
     }
 
     public static function getFormat(): string
